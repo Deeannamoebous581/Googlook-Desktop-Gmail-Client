@@ -1,0 +1,225 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Googlook.ViewModels"
+             xmlns:ctl="using:Googlook.Controls"
+             x:Class="Googlook.Views.MailView"
+             x:DataType="vm:MainViewModel">
+
+  <Grid ColumnDefinitions="270,400,*">
+
+    <!-- ===== Left: compose + account toolbar + accounts cascading into folders ===== -->
+    <Border Grid.Column="0" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,1,0">
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="8,12">
+          <Button Margin="8,0,8,8" Padding="22,14" CornerRadius="16"
+                  Background="{DynamicResource ComposeBg}" BorderThickness="0" HorizontalAlignment="Left"
+                  Click="OnComposeClick">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Text="✏"/>
+              <TextBlock Text="Compose" FontSize="14"/>
+            </StackPanel>
+          </Button>
+
+          <!-- account management -->
+          <Grid Margin="8,4,8,4" ColumnDefinitions="*,Auto,Auto">
+            <TextBlock Grid.Column="0" Text="Accounts" FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                       VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Command="{Binding AddAccountCommand}" ToolTip.Tip="Add a Gmail account"
+                    Background="Transparent" BorderThickness="0" Padding="8,4" Content="＋"/>
+            <Button Grid.Column="2" Command="{Binding RefreshAccountsCommand}" ToolTip.Tip="Refresh"
+                    Background="Transparent" BorderThickness="0" Padding="8,4" Content="⟳"/>
+          </Grid>
+
+          <ItemsControl ItemsSource="{Binding Accounts}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:AccountVM">
+                <StackPanel Margin="0,4">
+                  <!-- account header: selects this account's profile + expands folders -->
+                  <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                          Background="Transparent" BorderThickness="0" Padding="8,6"
+                          Command="{Binding ActivateCommand}">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <Border Grid.Column="0" Width="30" Height="30" CornerRadius="15" Background="#C5221F">
+                        <TextBlock Text="{Binding Initial}" Foreground="White" FontSize="13"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                      </Border>
+                      <TextBlock Grid.Column="1" Text="{Binding Email}" Margin="10,0"
+                                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                      <TextBlock Grid.Column="2" Text="▾" FontSize="11" VerticalAlignment="Center" Opacity="0.6"/>
+                    </Grid>
+                  </Button>
+
+                  <!-- folders: clicking loads that label into the message list -->
+                  <ItemsControl ItemsSource="{Binding Folders}" IsVisible="{Binding IsExpanded}"
+                                Margin="12,2,0,4">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:FolderVM">
+                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                Background="Transparent" BorderThickness="0" Padding="0"
+                                Command="{Binding SelectCommand}">
+                          <Border CornerRadius="0,16,16,0" Padding="26,0,12,0" Height="34">
+                            <Grid ColumnDefinitions="*,Auto">
+                              <TextBlock Text="{Binding Name}" VerticalAlignment="Center" FontSize="14"/>
+                              <TextBlock Grid.Column="1" Text="{Binding Unread}" VerticalAlignment="Center"
+                                         FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                         IsVisible="{Binding Unread, Converter={x:Static vm:Conv.IntToBool}}"/>
+                            </Grid>
+                          </Border>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+
+    <!-- ===== Middle: conversation list ===== -->
+    <Border Grid.Column="1" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,1,0">
+      <Grid RowDefinitions="Auto,*">
+        <ProgressBar Grid.Row="0" IsIndeterminate="True" Height="3"
+                     IsVisible="{Binding IsBusy}" Foreground="{DynamicResource AccentText}"/>
+        <ListBox Grid.Row="1" Classes="messages" Background="Transparent"
+                 ItemsSource="{Binding Threads}" SelectedItem="{Binding SelectedThread}"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:ThreadVM">
+              <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                <Button Grid.Column="0" Command="{Binding ToggleStarCommand}"
+                        Background="Transparent" BorderThickness="0" Padding="2"
+                        VerticalAlignment="Center" Content="★" FontSize="16"
+                        Foreground="{Binding IsStarred, Converter={x:Static vm:Conv.StarBrush}}"/>
+                <StackPanel Grid.Column="1" Margin="10,8" VerticalAlignment="Center" Spacing="1">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0" Text="{Binding Participants}" FontSize="14"
+                               FontWeight="{Binding IsUnread, Converter={x:Static vm:Conv.UnreadToWeight}}"
+                               TextTrimming="CharacterEllipsis"/>
+                    <Border Grid.Column="1" Background="{DynamicResource BadgeBg}" CornerRadius="9" Padding="6,1" Margin="6,0,0,0"
+                            IsVisible="{Binding HasMultiple}">
+                      <TextBlock Text="{Binding CountLabel}" FontSize="11" Foreground="{DynamicResource Blue}"/>
+                    </Border>
+                  </Grid>
+                  <TextBlock Text="{Binding Subject}" FontSize="13"
+                             FontWeight="{Binding IsUnread, Converter={x:Static vm:Conv.UnreadToWeight}}"
+                             TextTrimming="CharacterEllipsis"/>
+                  <TextBlock Text="{Binding Snippet}" FontSize="12" Foreground="{DynamicResource TextMuted}"
+                             TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="{Binding TimeLabel}" FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                           VerticalAlignment="Top" Margin="0,10,4,0"/>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+    </Border>
+
+    <!-- ===== Right: conversation view ===== -->
+    <Border Grid.Column="2" Background="{DynamicResource Panel}">
+      <Grid RowDefinitions="Auto,Auto,*" DataContext="{Binding SelectedThread}" x:DataType="vm:ThreadVM">
+
+        <!-- thread header -->
+        <StackPanel Grid.Row="0" Margin="28,22,28,10" Spacing="8">
+          <TextBlock Text="{Binding Subject}" FontSize="22" TextWrapping="Wrap"/>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Text="{Binding Participants}" Foreground="{DynamicResource TextSecondary}" FontSize="13"
+                       TextTrimming="CharacterEllipsis"/>
+            <Border Grid.Column="1" Background="{DynamicResource BadgeBg}" CornerRadius="10" Padding="8,2"
+                    IsVisible="{Binding HasMultiple}">
+              <TextBlock Text="{Binding CountLabel}" FontSize="12" Foreground="{DynamicResource Blue}"/>
+            </Border>
+          </Grid>
+          <ProgressBar IsIndeterminate="True" Height="2" IsVisible="{Binding IsLoading}" Foreground="{DynamicResource AccentText}"/>
+        </StackPanel>
+
+        <!-- conversation strip: pick which message to read (only for multi-message threads) -->
+        <Border Grid.Row="1" IsVisible="{Binding HasMultiple}" Margin="20,0,20,8"
+                Background="{DynamicResource PanelAlt}" CornerRadius="10">
+          <ListBox Background="Transparent" MaxHeight="150" BorderThickness="0"
+                   ItemsSource="{Binding Messages}" SelectedItem="{Binding SelectedMessage}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:MessageVM">
+                <Grid ColumnDefinitions="*,Auto" Margin="4,2">
+                  <StackPanel Grid.Column="0" Spacing="1">
+                    <TextBlock Text="{Binding Sender}" FontSize="13"
+                               FontWeight="{Binding IsUnread, Converter={x:Static vm:Conv.UnreadToWeight}}"/>
+                    <TextBlock Text="{Binding Snippet}" FontSize="12" Foreground="{DynamicResource TextMuted}"
+                               TextTrimming="CharacterEllipsis"/>
+                  </StackPanel>
+                  <TextBlock Grid.Column="1" Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource TextSecondary}"
+                             VerticalAlignment="Top"/>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Border>
+
+        <!-- selected message: sender line, attachments, then the HTML body -->
+        <Grid Grid.Row="2" DataContext="{Binding SelectedMessage}" x:DataType="vm:MessageVM"
+              RowDefinitions="Auto,Auto,Auto,*">
+
+          <Grid Grid.Row="0" Margin="28,4,28,8" ColumnDefinitions="Auto,*,Auto">
+            <Border Grid.Column="0" Width="36" Height="36" CornerRadius="18" Background="#1A73E8"/>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0">
+              <TextBlock Text="{Binding Sender}" FontWeight="500" FontSize="14"/>
+              <TextBlock Text="{Binding TimeLabel}" Foreground="{DynamicResource TextSecondary}" FontSize="12"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <Button Content="↩ Reply" Click="OnReply" Padding="10,6"
+                      Background="Transparent" BorderBrush="{DynamicResource ChipBorder}" BorderThickness="1"/>
+              <Button Content="↩↩ All" Click="OnReplyAll" Padding="10,6"
+                      Background="Transparent" BorderBrush="{DynamicResource ChipBorder}" BorderThickness="1"/>
+              <Button Content="↪ Forward" Click="OnForward" Padding="10,6"
+                      Background="Transparent" BorderBrush="{DynamicResource ChipBorder}" BorderThickness="1"/>
+            </StackPanel>
+          </Grid>
+
+          <!-- received attachments (click to save) -->
+          <ItemsControl Grid.Row="1" ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}"
+                        Margin="28,0,28,8">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:AttachmentVM">
+                <Button Click="OnSaveAttachment" Margin="0,0,8,8" Padding="10,6"
+                        Background="{DynamicResource PanelAlt}" BorderThickness="1" BorderBrush="{DynamicResource ChipBorder}" CornerRadius="8">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="📎" VerticalAlignment="Center"/>
+                    <StackPanel>
+                      <TextBlock Text="{Binding Filename}" FontSize="13" MaxWidth="220"
+                                 TextTrimming="CharacterEllipsis"/>
+                      <TextBlock Text="{Binding SizeLabel}" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                    </StackPanel>
+                    <TextBlock Text="⤓" Foreground="{DynamicResource Blue}" VerticalAlignment="Center"/>
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <Border Grid.Row="2" Background="{DynamicResource BannerBg}" CornerRadius="8" Padding="10"
+                  Margin="28,0,28,8" IsVisible="{Binding RemoteBlocked}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <TextBlock Grid.Column="0" Text="🛡" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" Text="Remote content is blocked to protect your privacy."
+                         FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                         VerticalAlignment="Center" Margin="8,0"/>
+              <Button Grid.Column="2" Content="Show images" Command="{Binding ShowRemoteContentCommand}"
+                      Background="Transparent" BorderBrush="{DynamicResource ChipBorder}"
+                      BorderThickness="1" Padding="12,4" CornerRadius="6"/>
+            </Grid>
+          </Border>
+
+          <!-- HTML body (sanitized); snippet shows through if WebView2 is unavailable -->
+          <Grid Grid.Row="3" Margin="12,0,12,12">
+            <TextBlock Text="{Binding Snippet}" TextWrapping="Wrap" FontSize="14" LineHeight="22"
+                       Margin="16,4" VerticalAlignment="Top"/>
+            <ctl:HtmlMessageView Html="{Binding BodyText}" AllowRemote="{Binding ShowRemote}"/>
+          </Grid>
+        </Grid>
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

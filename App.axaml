@@ -1,0 +1,82 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Googlook.App"
+             RequestedThemeVariant="Light">
+
+  <Application.Resources>
+    <ResourceDictionary>
+      <!-- Semantic colour tokens. Referenced with {DynamicResource ...} so they
+           re-resolve instantly when the theme variant flips between Light and Dark. -->
+      <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="Surface"       Color="#F6F8FC"/>
+          <SolidColorBrush x:Key="Panel"         Color="#FFFFFF"/>
+          <SolidColorBrush x:Key="PanelAlt"      Color="#F1F3F4"/>
+          <SolidColorBrush x:Key="Search"        Color="#EAF1FB"/>
+          <SolidColorBrush x:Key="Divider"       Color="#E8EAED"/>
+          <SolidColorBrush x:Key="TextSecondary" Color="#5F6368"/>
+          <SolidColorBrush x:Key="TextMuted"     Color="#80868B"/>
+          <SolidColorBrush x:Key="Blue"          Color="#1A73E8"/>
+          <SolidColorBrush x:Key="ComposeBg"     Color="#C2E7FF"/>
+          <SolidColorBrush x:Key="ComposeFg"     Color="#001D35"/>
+          <SolidColorBrush x:Key="BannerBg"      Color="#FEF7E0"/>
+          <SolidColorBrush x:Key="ChipBorder"    Color="#DADCE0"/>
+          <SolidColorBrush x:Key="BadgeBg"       Color="#E8F0FE"/>
+          <SolidColorBrush x:Key="AccentText"    Color="#C5221F"/>
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="Surface"       Color="#17181C"/>
+          <SolidColorBrush x:Key="Panel"         Color="#202024"/>
+          <SolidColorBrush x:Key="PanelAlt"      Color="#2A2A30"/>
+          <SolidColorBrush x:Key="Search"        Color="#2A2A30"/>
+          <SolidColorBrush x:Key="Divider"       Color="#34343A"/>
+          <SolidColorBrush x:Key="TextSecondary" Color="#A8ABB2"/>
+          <SolidColorBrush x:Key="TextMuted"     Color="#8E9299"/>
+          <SolidColorBrush x:Key="Blue"          Color="#8AB4F8"/>
+          <SolidColorBrush x:Key="ComposeBg"     Color="#00497A"/>
+          <SolidColorBrush x:Key="ComposeFg"     Color="#D3E3FD"/>
+          <SolidColorBrush x:Key="BannerBg"      Color="#33301F"/>
+          <SolidColorBrush x:Key="ChipBorder"    Color="#45454C"/>
+          <SolidColorBrush x:Key="BadgeBg"       Color="#26343F"/>
+          <SolidColorBrush x:Key="AccentText"    Color="#F28B82"/>
+        </ResourceDictionary>
+
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <!-- Base look -->
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{DynamicResource Surface}"/>
+      <Setter Property="FontFamily" Value="Roboto, Segoe UI, sans-serif"/>
+    </Style>
+
+    <!-- Top service-tab strip: transparent items, subtle hover -->
+    <Style Selector="ListBox.tabstrip">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Padding" Value="8,0"/>
+    </Style>
+    <Style Selector="ListBox.tabstrip ListBoxItem">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="Margin" Value="2,0"/>
+    </Style>
+    <Style Selector="ListBox.tabstrip ListBoxItem:selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="ListBox.tabstrip ListBoxItem:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource PanelAlt}"/>
+    </Style>
+
+    <!-- Message rows: comfortable Gmail density -->
+    <Style Selector="ListBox.messages ListBoxItem">
+      <Setter Property="Padding" Value="8,0"/>
+      <Setter Property="MinHeight" Value="64"/>
+    </Style>
+  </Application.Styles>
+</Application>

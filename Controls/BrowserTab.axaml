@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="using:Googlook.Controls"
+             x:Class="Googlook.Controls.BrowserTab"
+             x:Name="Root"
+             x:CompileBindings="False">
+
+  <Grid RowDefinitions="Auto,*">
+
+    <!-- toolbar -->
+    <Border Grid.Row="0" Background="{DynamicResource Panel}"
+            BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,0,1" Padding="8,6">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
+        <Button Grid.Column="0" Content="◀" Click="OnBack" Padding="10,4" Margin="0,0,4,0"
+                Background="Transparent" BorderThickness="0" ToolTip.Tip="Back"/>
+        <Button Grid.Column="1" Content="▶" Click="OnForward" Padding="10,4" Margin="0,0,4,0"
+                Background="Transparent" BorderThickness="0" ToolTip.Tip="Forward"/>
+        <Button Grid.Column="2" Content="⟳" Click="OnReload" Padding="10,4"
+                Background="Transparent" BorderThickness="0" ToolTip.Tip="Reload"/>
+        <Border Grid.Column="3" Background="{DynamicResource Search}" CornerRadius="8"
+                Margin="10,0" Padding="12,6" VerticalAlignment="Center">
+          <TextBlock Text="{Binding #Root.Url}" Foreground="{DynamicResource TextSecondary}"
+                     FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+        </Border>
+        <Button Grid.Column="4" Content="Open in Chrome" Click="OnOpenExternal" Padding="12,6"
+                Background="Transparent" BorderBrush="{DynamicResource ChipBorder}" BorderThickness="1"
+                ToolTip.Tip="Open this page in your Chrome window"/>
+      </Grid>
+    </Border>
+
+    <!-- embedded browser (Chromium via WebView2), with a fallback message behind it -->
+    <Grid Grid.Row="1" Background="{DynamicResource Surface}">
+      <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="480" Spacing="8">
+        <TextBlock Text="Loading…" HorizontalAlignment="Center" Foreground="{DynamicResource TextSecondary}"/>
+        <TextBlock FontSize="12" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="440"
+                   Foreground="{DynamicResource TextSecondary}"
+                   Text="If this stays blank, install the Microsoft Edge WebView2 Runtime, or use “Open in Chrome” above."/>
+      </StackPanel>
+      <ctl:BrowserView x:Name="Web" Address="{Binding #Root.Url}" ProfileDir="{Binding #Root.ProfileDir}"/>
+    </Grid>
+  </Grid>
+</UserControl>

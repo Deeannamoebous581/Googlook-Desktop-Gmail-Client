@@ -1,0 +1,51 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:m="using:Googlook.Models"
+        x:Class="Googlook.Views.ComposeWindow"
+        x:CompileBindings="False"
+        Width="660" Height="600" Title="New message"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource Panel}">
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="18">
+    <AutoCompleteBox Grid.Row="0" x:Name="ToBox" Watermark="To" Margin="0,0,0,10"
+                     FilterMode="ContainsOrdinal" MinimumPrefixLength="1"/>
+    <TextBox Grid.Row="1" x:Name="SubjBox" Watermark="Subject" Margin="0,0,0,10"/>
+    <TextBox Grid.Row="2" x:Name="BodyBox" AcceptsReturn="True" TextWrapping="Wrap"
+             Watermark="Write your message…" VerticalContentAlignment="Top"/>
+
+    <!-- attachment chips -->
+    <ItemsControl Grid.Row="3" x:Name="AttachList" Margin="0,10,0,0">
+      <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="m:OutgoingAttachment">
+          <Border Margin="0,0,8,8" Padding="10,6" Background="{DynamicResource PanelAlt}"
+                  BorderBrush="{DynamicResource ChipBorder}" BorderThickness="1" CornerRadius="8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="📎" VerticalAlignment="Center"/>
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="{Binding Filename}" FontSize="13" MaxWidth="240"
+                           TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding Source}" FontSize="10" Foreground="{DynamicResource TextSecondary}"/>
+              </StackPanel>
+              <Button Content="✕" Click="OnRemoveAttachment" Background="Transparent"
+                      BorderThickness="0" Padding="4" FontSize="12" Foreground="{DynamicResource TextSecondary}"/>
+            </StackPanel>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <!-- toolbar -->
+    <Grid Grid.Row="4" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" Margin="0,12,0,0">
+      <Button Grid.Column="0" Content="📎 Attach file" Click="OnAttachFile" Padding="14,8"
+              Background="Transparent" BorderBrush="{DynamicResource ChipBorder}" BorderThickness="1"/>
+      <Button Grid.Column="1" Content="▲ From Drive" Click="OnFromDrive" Padding="14,8" Margin="8,0,0,0"
+              Background="Transparent" BorderBrush="{DynamicResource ChipBorder}" BorderThickness="1"/>
+      <TextBlock Grid.Column="3" x:Name="ErrorText" Foreground="{DynamicResource AccentText}" VerticalAlignment="Center"
+                 FontSize="12" Margin="0,0,10,0"/>
+      <Button Grid.Column="4" Content="Cancel" Padding="18,8" Click="OnCancel"/>
+      <Button Grid.Column="5" Content="Send" Padding="22,8" Margin="10,0,0,0"
+              Background="{DynamicResource ComposeBg}" Click="OnSend"/>
+    </Grid>
+  </Grid>
+</Window>

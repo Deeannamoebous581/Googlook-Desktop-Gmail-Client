@@ -1,0 +1,28 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="using:Googlook.Controls"
+             x:Class="Googlook.Views.TerminalView"
+             Focusable="True" x:CompileBindings="False">
+
+  <Border Background="#0B0B0B">
+    <Grid RowDefinitions="Auto,*,Auto">
+
+      <!-- header -->
+      <Border Grid.Row="0" Background="#141414" Padding="14,8" BorderBrush="#262626" BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Grid.Column="0" Text="Gemini CLI" Foreground="#EDEDED" FontSize="13" VerticalAlignment="Center"/>
+          <TextBlock Grid.Column="1" x:Name="ProfileLabel" Foreground="#7A7A7A" FontSize="11" VerticalAlignment="Center"/>
+        </Grid>
+      </Border>
+
+      <!-- terminal grid (custom-drawn from the VT screen buffer) -->
+      <ctl:TerminalSurface Grid.Row="1" x:Name="Surface"/>
+
+      <!-- hint -->
+      <Border Grid.Row="2" Background="#141414" Padding="12,6" BorderBrush="#262626" BorderThickness="0,1,0,0">
+        <TextBlock x:Name="HintText" Foreground="#6E6E6E" FontSize="11"
+                   Text="Click to focus, then type. Arrows, Tab, Ctrl-C are forwarded."/>
+      </Border>
+    </Grid>
+  </Border>
+</UserControl>

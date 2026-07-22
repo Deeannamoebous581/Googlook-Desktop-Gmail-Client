@@ -1,0 +1,70 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- net8.0-windows auto-defines the WINDOWS symbol used to gate the WebView2 host. -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- We host WebView2 through its Core API (NativeControlHost), not the WPF/WinForms
+         controls. Turning these off keeps WebView2's WPF/WinForms wrappers (and their
+         conflicting WindowsBase reference) out of the build. -->
+    <UseWPF>false</UseWPF>
+    <UseWindowsForms>false</UseWindowsForms>
+    <MSBuildWarningsAsMessages>MSB3277</MSBuildWarningsAsMessages>
+    <!-- Surface only high/critical NuGet advisories. HtmlSanitizer 8.x has a moderate
+         advisory; bump it to 9.x below if you want the audit fully clear (the API is
+         the same). Our reader also blocks all network + disables JS as defense in depth. -->
+    <NuGetAuditLevel>high</NuGetAuditLevel>
+    <!-- Lets restore resolve the windows TFM even on macOS/Linux (e.g. for IntelliSense).
+         No effect when building on Windows in Visual Studio. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!--
+      In Visual Studio: open Googlook.sln, let NuGet restore, then press F5.
+      Requires the .NET 8 SDK (the ".NET desktop development" workload). The embedded
+      browser and HTML reader also need the Edge WebView2 Runtime at run time (ships
+      with current Windows). See the README for a self-contained publish command and
+      the Google Cloud setup.
+
+      Version note: the Google.Apis.*, HtmlSanitizer and WebView2 packages use a
+      trailing ".*" so NuGet resolves the latest matching build that exists on
+      nuget.org. Pin them to exact versions for fully deterministic restores.
+    -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UI framework -->
+    <PackageReference Include="Avalonia" Version="11.2.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.1" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.1" />
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.2.1"
+                      Condition="'$(Configuration)' == 'Debug'" />
+
+    <!-- MVVM helpers (ObservableProperty / RelayCommand source generators) -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+
+    <!-- Windows DPAPI: protects the vault key to the current Windows user so the app
+         can stay signed in without a passcode (System.Security.Cryptography.ProtectedData). -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+
+    <!-- Google Gmail / Drive / Pub-Sub / People (floated to the latest 1.68.0.x build) -->
+    <PackageReference Include="Google.Apis.Gmail.v1" Version="1.68.0.*" />
+    <PackageReference Include="Google.Apis.Drive.v3" Version="1.68.0.*" />
+    <PackageReference Include="Google.Apis.Pubsub.v1" Version="1.68.0.*" />
+    <PackageReference Include="Google.Apis.PeopleService.v1" Version="1.68.0.*" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.68.0" />
+
+    <!-- In-email tracker / remote content stripping (Ganss.Xss namespace, 8.x and up) -->
+    <PackageReference Include="HtmlSanitizer" Version="8.*" />
+
+    <!-- WebView2 (Chromium) powers both the email reader (Controls/HtmlMessageView.cs)
+         and the embedded browser tabs (Controls/BrowserView.cs), hosted via
+         NativeControlHost. Needs the Edge WebView2 Runtime at run time (see README). -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.*" />
+  </ItemGroup>
+
+</Project>

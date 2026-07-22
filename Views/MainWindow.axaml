@@ -1,0 +1,168 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Googlook.ViewModels"
+        xmlns:views="using:Googlook.Views"
+        xmlns:ctl="using:Googlook.Controls"
+        x:Class="Googlook.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Width="1320" Height="860" MinWidth="900" MinHeight="600"
+        Title="Googlook">
+
+  <Grid RowDefinitions="60,48,*">
+
+    <!-- ============ Top bar ============ -->
+    <Border Grid.Row="0" Background="{DynamicResource Panel}"
+            BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="16,0" Spacing="10" VerticalAlignment="Center">
+          <Border Width="30" Height="30" CornerRadius="7" Background="#C5221F"/>
+          <TextBlock Text="Googlook" FontSize="20" FontWeight="500" VerticalAlignment="Center"/>
+        </StackPanel>
+
+        <Border Grid.Column="1" Height="42" MaxWidth="760" Margin="24,0"
+                Background="{DynamicResource Search}" CornerRadius="10" VerticalAlignment="Center">
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Grid.Column="0" Text="🔍" Margin="14,0,8,0" VerticalAlignment="Center" Opacity="0.6"/>
+            <TextBox Grid.Column="1" Watermark="Search mail" BorderThickness="0"
+                     Background="Transparent" VerticalContentAlignment="Center"/>
+          </Grid>
+        </Border>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="16,0" Spacing="8" VerticalAlignment="Center">
+          <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource TextSecondary}" FontSize="12"
+                     VerticalAlignment="Center" MaxWidth="240" TextTrimming="CharacterEllipsis"/>
+          <Border Background="#FEEFC3" CornerRadius="10" Padding="10,4" IsVisible="{Binding IsDemoMode}">
+            <TextBlock Text="Demo data" FontSize="11" Foreground="#7A5900"/>
+          </Border>
+
+          <!-- quick dark-mode toggle -->
+          <ToggleButton IsChecked="{Binding IsDarkMode}" ToolTip.Tip="Toggle dark mode"
+                        Padding="10,8" CornerRadius="10" Background="{DynamicResource PanelAlt}"
+                        BorderThickness="0" Content="🌙"/>
+
+          <!-- settings flyout (notifications + theme) -->
+          <Button ToolTip.Tip="Settings" Padding="10,8" CornerRadius="10"
+                  Background="{DynamicResource PanelAlt}" BorderThickness="0" Content="⚙">
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedRight">
+                <ScrollViewer MaxHeight="540">
+                  <StackPanel Width="300" Spacing="12" Margin="8">
+                    <TextBlock Text="Settings" FontWeight="600" FontSize="14"/>
+                    <ToggleSwitch IsChecked="{Binding IsDarkMode}" Content="Dark mode"/>
+                    <ToggleSwitch IsChecked="{Binding ShowNotifications}" Content="Desktop notifications"/>
+                    <ToggleSwitch IsChecked="{Binding PrivateNotifications}" Content="Hide sender &amp; subject"/>
+                    <TextBlock Text="Private notifications show only that new mail arrived, not who or what."
+                               FontSize="11" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap"/>
+
+                    <Border Height="1" Background="{DynamicResource Divider}"/>
+
+                    <TextBlock Text="Accounts" FontWeight="600" FontSize="13"/>
+                    <ItemsControl ItemsSource="{Binding Accounts}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,2">
+                            <Border Grid.Column="0" Width="26" Height="26" CornerRadius="13"
+                                    Background="#1A73E8" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding Initial}" Foreground="White" FontSize="12"
+                                         HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="{Binding Email}" VerticalAlignment="Center"
+                                       Margin="8,0" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                            <Button Grid.Column="2" Content="Remove" Command="{Binding RemoveCommand}"
+                                    FontSize="11" Padding="8,3" Background="Transparent"
+                                    BorderBrush="{DynamicResource ChipBorder}" BorderThickness="1"/>
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Content="＋ Add Google account" Command="{Binding AddAccountCommand}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Background="{DynamicResource ComposeBg}" Padding="10,8" CornerRadius="8"/>
+
+                    <Border Height="1" Background="{DynamicResource Divider}"/>
+
+                    <TextBlock Text="Security" FontWeight="600" FontSize="13"/>
+                    <StackPanel IsVisible="{Binding !HasPasscodeLock}" Spacing="6">
+                      <TextBlock Text="Staying signed in on this PC (tokens are encrypted for your Windows account)."
+                                 FontSize="11" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap"/>
+                      <Button Content="Add passcode lock" Command="{Binding AddPasscodeCommand}"
+                              HorizontalAlignment="Left" Padding="10,6" CornerRadius="6"
+                              Background="Transparent" BorderBrush="{DynamicResource ChipBorder}" BorderThickness="1"/>
+                    </StackPanel>
+                    <StackPanel IsVisible="{Binding HasPasscodeLock}" Spacing="6">
+                      <TextBlock Text="A passcode is required on each launch." FontSize="11"
+                                 Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap"/>
+                      <Button Content="Remove passcode (stay signed in)" Command="{Binding RemovePasscodeCommand}"
+                              HorizontalAlignment="Left" Padding="10,6" CornerRadius="6"
+                              Background="Transparent" BorderBrush="{DynamicResource ChipBorder}" BorderThickness="1"/>
+                    </StackPanel>
+                  </StackPanel>
+                </ScrollViewer>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+
+          <Button Command="{Binding LockCommand}" ToolTip.Tip="Lock &amp; encrypt config at rest"
+                  IsVisible="{Binding HasPasscodeLock}"
+                  Padding="14,8" CornerRadius="10" Background="{DynamicResource PanelAlt}" BorderThickness="0">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="🔒"/>
+              <TextBlock Text="Lock"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- ============ Service tabs ============ -->
+    <Border Grid.Row="1" Background="{DynamicResource Panel}"
+            BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,0,1">
+      <ListBox Classes="tabstrip" ItemsSource="{Binding ServiceTabs}"
+               SelectedItem="{Binding SelectedTab}" VerticalAlignment="Center">
+        <ListBox.ItemsPanel>
+          <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+        </ListBox.ItemsPanel>
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:ServiceTabVM">
+            <TextBlock Text="{Binding Title}" Padding="18,10" FontSize="14"/>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Border>
+
+    <!-- ============ Content host ============ -->
+    <Panel Grid.Row="2">
+      <views:MailView   IsVisible="{Binding IsMailSelected}"/>
+      <ctl:BrowserTab   Url="{Binding BrowserUrl}" ProfileDir="{Binding ActiveProfileDir}"
+                        IsVisible="{Binding IsBrowserSelected}"/>
+
+      <!-- Gemini CLI tab: live ConPTY terminal, isolated to the active account -->
+      <views:TerminalView ProfileDir="{Binding ActiveProfileDir}"
+                          IsVisible="{Binding IsTerminalSelected}"/>
+
+      <!-- ============ Lock overlay ============ -->
+      <Border IsVisible="{Binding IsLocked}" Background="{DynamicResource Surface}">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="16" Width="340">
+          <Border Width="60" Height="60" CornerRadius="14" Background="#C5221F" HorizontalAlignment="Center"/>
+          <TextBlock Text="Create a passcode" FontSize="20" HorizontalAlignment="Center"
+                     IsVisible="{Binding NeedsPasscodeSetup}"/>
+          <TextBlock Text="Googlook is locked" FontSize="20" HorizontalAlignment="Center"
+                     IsVisible="{Binding !NeedsPasscodeSetup}"/>
+          <TextBlock Text="Sets the key that encrypts your config and tokens at rest."
+                     Foreground="{DynamicResource TextSecondary}" FontSize="12" TextWrapping="Wrap"
+                     TextAlignment="Center" IsVisible="{Binding NeedsPasscodeSetup}"/>
+          <TextBox x:Name="PasscodeBox" Watermark="Passcode" PasswordChar="●"
+                   KeyDown="OnPasscodeKeyDown"/>
+          <Button Content="Unlock" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  Click="OnUnlockClick" Background="#C5221F" Foreground="White" Padding="0,10" CornerRadius="8"/>
+          <Button Content="Cancel" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                  Click="OnCancelPasscode" IsVisible="{Binding NeedsPasscodeSetup}"
+                  Background="Transparent" BorderBrush="{DynamicResource ChipBorder}" BorderThickness="1"
+                  Padding="0,10" CornerRadius="8"/>
+          <TextBlock Text="{Binding LockError}" Foreground="{DynamicResource AccentText}" FontSize="12"
+                     HorizontalAlignment="Center"/>
+        </StackPanel>
+      </Border>
+    </Panel>
+  </Grid>
+</Window>
