@@ -303,22 +303,7 @@ set up, the **interval poller** keeps working.
 
 ---
 
-## Security notes & honest caveats
 
-- The vault protects data **at rest**. While unlocked, secrets are in memory (as with
-  any app). Lock when you step away.
-- A passcode is only as strong as you make it; PBKDF2 at 600k iterations slows
-  brute force but a weak passcode is still weak.
-- Package versions in the `.csproj` are pinned to known-good releases; if `restore`
-  can't find one (e.g. `Google.Apis.Pubsub.v1`), bump to the latest on nuget.org.
-- **Not yet compiled here** (this was built in an environment without a Windows .NET
-  toolchain or network). The code is written to compile, but expect to smooth an edge.
-  The **highest on-device risk** is the native `ConPtySession` P/Invoke and the
-  `VtScreen` emulator — both are self-contained, so iterate on those files if the
-  terminal misbehaves. The VT emulator covers the common subset (see remaining polish).
-- The embedded browser + HTML reader need the **WebView2 Runtime** (ships with modern
-  Windows; otherwise a small MS download). Without it, those surfaces degrade to a
-  fallback rather than crashing.
 
 This is a starting point you can build on, not a security-audited release. Treat the
 credential-handling paths as needing your own review before real-world use.
