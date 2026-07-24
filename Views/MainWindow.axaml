@@ -15,7 +15,7 @@
             BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="Auto,*,Auto">
         <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="16,0" Spacing="10" VerticalAlignment="Center">
-          <Border Width="30" Height="30" CornerRadius="7" Background="#C5221F"/>
+          <ctl:LogoMark Width="34" Height="26" VerticalAlignment="Center"/>
           <TextBlock Text="Googlook" FontSize="20" FontWeight="500" VerticalAlignment="Center"/>
         </StackPanel>
 
@@ -23,7 +23,8 @@
                 Background="{DynamicResource Search}" CornerRadius="10" VerticalAlignment="Center">
           <Grid ColumnDefinitions="Auto,*">
             <TextBlock Grid.Column="0" Text="🔍" Margin="14,0,8,0" VerticalAlignment="Center" Opacity="0.6"/>
-            <TextBox Grid.Column="1" Watermark="Search mail" BorderThickness="0"
+            <TextBox Grid.Column="1" Watermark="Search mail  (Enter to search, Esc to clear)"
+                     Text="{Binding SearchQuery}" KeyDown="OnSearchKeyDown" BorderThickness="0"
                      Background="Transparent" VerticalContentAlignment="Center"/>
           </Grid>
         </Border>
@@ -31,10 +32,6 @@
         <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="16,0" Spacing="8" VerticalAlignment="Center">
           <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource TextSecondary}" FontSize="12"
                      VerticalAlignment="Center" MaxWidth="240" TextTrimming="CharacterEllipsis"/>
-          <Border Background="#FEEFC3" CornerRadius="10" Padding="10,4" IsVisible="{Binding IsDemoMode}">
-            <TextBlock Text="Demo data" FontSize="11" Foreground="#7A5900"/>
-          </Border>
-
           <!-- quick dark-mode toggle -->
           <ToggleButton IsChecked="{Binding IsDarkMode}" ToolTip.Tip="Toggle dark mode"
                         Padding="10,8" CornerRadius="10" Background="{DynamicResource PanelAlt}"
@@ -60,7 +57,7 @@
                     <ItemsControl ItemsSource="{Binding Accounts}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                          <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,2">
+                          <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,2">
                             <Border Grid.Column="0" Width="26" Height="26" CornerRadius="13"
                                     Background="#1A73E8" VerticalAlignment="Center">
                               <TextBlock Text="{Binding Initial}" Foreground="White" FontSize="12"
@@ -68,7 +65,12 @@
                             </Border>
                             <TextBlock Grid.Column="1" Text="{Binding Email}" VerticalAlignment="Center"
                                        Margin="8,0" FontSize="12" TextTrimming="CharacterEllipsis"/>
-                            <Button Grid.Column="2" Content="Remove" Command="{Binding RemoveCommand}"
+                            <Border Grid.Column="2" Background="{DynamicResource BadgeBg}" CornerRadius="7"
+                                    Padding="6,1" Margin="0,0,6,0" VerticalAlignment="Center"
+                                    IsVisible="{Binding Tag, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                              <TextBlock Text="{Binding Tag}" FontSize="10" Foreground="{DynamicResource Blue}"/>
+                            </Border>
+                            <Button Grid.Column="3" Content="Remove" Command="{Binding RemoveCommand}"
                                     FontSize="11" Padding="8,3" Background="Transparent"
                                     BorderBrush="{DynamicResource ChipBorder}" BorderThickness="1"/>
                           </Grid>
@@ -78,6 +80,10 @@
                     <Button Content="＋ Add Google account" Command="{Binding AddAccountCommand}"
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                             Background="{DynamicResource ComposeBg}" Padding="10,8" CornerRadius="8"/>
+                    <Button Content="＋ Add IMAP/POP3 account" Click="OnAddImapAccount"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Background="Transparent" BorderBrush="{DynamicResource ChipBorder}"
+                            BorderThickness="1" Padding="10,8" CornerRadius="8"/>
 
                     <Border Height="1" Background="{DynamicResource Divider}"/>
 
@@ -118,7 +124,9 @@
     <Border Grid.Row="1" Background="{DynamicResource Panel}"
             BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,0,1">
       <ListBox Classes="tabstrip" ItemsSource="{Binding ServiceTabs}"
-               SelectedItem="{Binding SelectedTab}" VerticalAlignment="Center">
+               SelectedItem="{Binding SelectedTab}" VerticalAlignment="Center"
+               ScrollViewer.HorizontalScrollBarVisibility="Auto"
+               ScrollViewer.VerticalScrollBarVisibility="Disabled">
         <ListBox.ItemsPanel>
           <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
         </ListBox.ItemsPanel>
@@ -141,9 +149,9 @@
                           IsVisible="{Binding IsTerminalSelected}"/>
 
       <!-- ============ Lock overlay ============ -->
-      <Border IsVisible="{Binding IsLocked}" Background="{DynamicResource Surface}">
+      <Border Classes="lockOverlay" IsVisible="{Binding IsLocked}" Background="{DynamicResource Surface}">
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="16" Width="340">
-          <Border Width="60" Height="60" CornerRadius="14" Background="#C5221F" HorizontalAlignment="Center"/>
+          <ctl:LogoMark Width="76" Height="57" HorizontalAlignment="Center"/>
           <TextBlock Text="Create a passcode" FontSize="20" HorizontalAlignment="Center"
                      IsVisible="{Binding NeedsPasscodeSetup}"/>
           <TextBlock Text="Googlook is locked" FontSize="20" HorizontalAlignment="Center"
@@ -161,6 +169,29 @@
                   Padding="0,10" CornerRadius="8"/>
           <TextBlock Text="{Binding LockError}" Foreground="{DynamicResource AccentText}" FontSize="12"
                      HorizontalAlignment="Center"/>
+        </StackPanel>
+      </Border>
+
+      <!-- ============ Startup splash ============
+           Fades out (opacity transition — boot-safe) once the shell is ready. -->
+      <Border IsVisible="{Binding ShowSplash}" Opacity="{Binding SplashOpacity}"
+              Background="{DynamicResource Surface}">
+        <Border.Transitions>
+          <Transitions>
+            <DoubleTransition Property="Opacity" Duration="0:0:0.45"/>
+          </Transitions>
+        </Border.Transitions>
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="18">
+          <ctl:LogoMark Width="120" Height="90" HorizontalAlignment="Center"/>
+          <TextBlock Text="Googlook" FontSize="34" FontWeight="500" HorizontalAlignment="Center"/>
+          <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
+            <Ellipse Width="9" Height="9" Fill="#4285F4"/>
+            <Ellipse Width="9" Height="9" Fill="#EA4335"/>
+            <Ellipse Width="9" Height="9" Fill="#FBBC04"/>
+            <Ellipse Width="9" Height="9" Fill="#34A853"/>
+          </StackPanel>
+          <TextBlock Text="Your mail, your machine." FontSize="13"
+                     Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
         </StackPanel>
       </Border>
     </Panel>

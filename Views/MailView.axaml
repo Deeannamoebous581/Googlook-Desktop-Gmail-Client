@@ -38,14 +38,19 @@
                   <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                           Background="Transparent" BorderThickness="0" Padding="8,6"
                           Command="{Binding ActivateCommand}">
-                    <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                       <Border Grid.Column="0" Width="30" Height="30" CornerRadius="15" Background="#C5221F">
                         <TextBlock Text="{Binding Initial}" Foreground="White" FontSize="13"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                       </Border>
                       <TextBlock Grid.Column="1" Text="{Binding Email}" Margin="10,0"
                                  VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                      <TextBlock Grid.Column="2" Text="▾" FontSize="11" VerticalAlignment="Center" Opacity="0.6"/>
+                      <Border Grid.Column="2" Background="{DynamicResource BadgeBg}" CornerRadius="7"
+                              Padding="6,1" Margin="0,0,6,0" VerticalAlignment="Center"
+                              IsVisible="{Binding Tag, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="{Binding Tag}" FontSize="10" Foreground="{DynamicResource Blue}"/>
+                      </Border>
+                      <TextBlock Grid.Column="3" Text="▾" FontSize="11" VerticalAlignment="Center" Opacity="0.6"/>
                     </Grid>
                   </Button>
 
@@ -82,6 +87,17 @@
       <Grid RowDefinitions="Auto,*">
         <ProgressBar Grid.Row="0" IsIndeterminate="True" Height="3"
                      IsVisible="{Binding IsBusy}" Foreground="{DynamicResource AccentText}"/>
+        <!-- welcome card (no accounts configured yet) -->
+        <StackPanel Grid.Row="1" IsVisible="{Binding ShowWelcome}" Spacing="14"
+                    VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="300">
+          <ctl:LogoMark Width="72" Height="54" HorizontalAlignment="Center"/>
+          <TextBlock Text="Welcome to Googlook" FontSize="18" FontWeight="500"
+                     HorizontalAlignment="Center"/>
+          <TextBlock TextWrapping="Wrap" TextAlignment="Center" FontSize="13"
+                     Foreground="{DynamicResource TextSecondary}"
+                     Text="Add a Gmail account with the ＋ button in the sidebar, or any IMAP/POP3 account from ⚙ Settings. Your credentials are encrypted on this PC."/>
+        </StackPanel>
+
         <ListBox Grid.Row="1" Classes="messages" Background="Transparent"
                  ItemsSource="{Binding Threads}" SelectedItem="{Binding SelectedThread}"
                  ScrollViewer.VerticalScrollBarVisibility="Auto">
@@ -199,7 +215,7 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
 
-          <Border Grid.Row="2" Background="{DynamicResource BannerBg}" CornerRadius="8" Padding="10"
+          <Border Grid.Row="2" Classes="fadeIn" Background="{DynamicResource BannerBg}" CornerRadius="8" Padding="10"
                   Margin="28,0,28,8" IsVisible="{Binding RemoteBlocked}">
             <Grid ColumnDefinitions="Auto,*,Auto">
               <TextBlock Grid.Column="0" Text="🛡" VerticalAlignment="Center"/>

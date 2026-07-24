@@ -188,17 +188,56 @@ public partial class MailView : UserControl
 
     private static string ReplyAllRecipients(MessageVM m, string? self)
     {
-        var parts = (m.FromRaw + "," + m.ToRaw)
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var all = SplitAddresses(m.FromRaw)
+            .Concat(SplitAddresses(m.ToRaw))
+            .Concat(SplitAddresses(m.CcRaw));
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var keep = new List<string>();
-        foreach (var p in parts)
+        foreach (var p in all)
         {
-            if (!string.IsNullOrEmpty(self) && p.Contains(self, StringComparison.OrdinalIgnoreCase)) continue;
-            if (seen.Add(p)) keep.Add(p);
+            var addr = BareAddress(p);
+            if (!string.IsNullOrEmpty(self) && string.Equals(addr, self, StringComparison.OrdinalIgnoreCase))
+                continue;   // don't reply to ourselves
+            if (seen.Add(addr)) keep.Add(p);
         }
         return keep.Count > 0 ? string.Join(", ", keep) : m.FromRaw;
+    }
+
+    /// <summary>
+    /// Splits an address-list header on commas, but not the commas inside quoted
+    /// display names ("Doe, John" &lt;j@x&gt;) or angle brackets.
+    /// </summary>
+    private static IEnumerable<string> SplitAddresses(string? list)
+    {
+        if (string.IsNullOrWhiteSpace(list)) yield break;
+        var cur = new StringBuilder();
+        bool inQuotes = false, inAngle = false;
+        foreach (var c in list)
+        {
+            if (c == '"') inQuotes = !inQuotes;
+            else if (!inQuotes && c == '<') inAngle = true;
+            else if (!inQuotes && c == '>') inAngle = false;
+
+            if (c == ',' && !inQuotes && !inAngle)
+            {
+                var piece = cur.ToString().Trim();
+                if (piece.Length > 0) yield return piece;
+                cur.Clear();
+                continue;
+            }
+            cur.Append(c);
+        }
+        var last = cur.ToString().Trim();
+        if (last.Length > 0) yield return last;
+    }
+
+    /// <summary>"Ada Lovelace &lt;ada@x.com&gt;" → "ada@x.com" (used for dedup + self-filtering).</summary>
+    private static string BareAddress(string mailbox)
+    {
+        var lt = mailbox.LastIndexOf('<');
+        var gt = mailbox.LastIndexOf('>');
+        return lt >= 0 && gt > lt ? mailbox[(lt + 1)..gt].Trim() : mailbox.Trim();
     }
 
     private static string? NullIfEmpty(string? s) => string.IsNullOrEmpty(s) ? null : s;

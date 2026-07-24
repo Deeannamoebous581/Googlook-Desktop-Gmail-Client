@@ -31,14 +31,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _lockError = "";
 
     // Mail state ----------------------------------------------------------
-    [ObservableProperty] private bool   _isDemoMode;
+    /// <summary>True when no account is configured yet — the mail pane shows a welcome card.</summary>
+    [ObservableProperty] private bool   _showWelcome;
     [ObservableProperty] private bool   _isBusy;
     [ObservableProperty] private string _statusText = "";
 
+    // Startup splash ------------------------------------------------------
+    [ObservableProperty] private bool   _showSplash = true;
+    [ObservableProperty] private double _splashOpacity = 1.0;
+
     private readonly ConfigVault _vault;
     private readonly HtmlSanitizerService _sanitizer = new();
-    private readonly List<GmailAccountSession> _sessions = new();
-    private GmailAccountSession? _activeSession;   // session whose folder is open (send-from)
+    private readonly List<MailAccountSession> _sessions = new();
+    private MailAccountSession? _activeSession;   // session whose folder is open (send-from)
     private string _activeLabelId = "INBOX";
     private PushWatchService? _push;
     private readonly DispatcherTimer _pollTimer = new();
@@ -54,6 +59,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _vault = vault;
         BuildServiceTabs();
         _pollTimer.Tick += (_, _) => _ = PollTickAsync();
+        _ = FadeSplashAsync();
 
         if (_vault.AutoKeyExists)
             _ = AutoStartAsync();      // "stay signed in" — DPAPI auto-unlock, no passcode
@@ -81,6 +87,19 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     partial void OnActiveAccountChanged(AccountVM? value) => OnPropertyChanged(nameof(ActiveProfileDir));
+
+    /// <summary>Holds the splash briefly, then fades it out (bootstrap continues underneath).</summary>
+    private async Task FadeSplashAsync()
+    {
+        try
+        {
+            await Task.Delay(1200);
+            SplashOpacity = 0.0;      // DoubleTransition animates this over ~450ms
+            await Task.Delay(500);
+        }
+        catch { }
+        ShowSplash = false;
+    }
 
     // ---- theme + notification settings (bound to the top-bar toggles) ---
 
@@ -176,25 +195,27 @@ public partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) { StatusText = "Couldn't remove passcode: " + ex.Message; }
     }
 
-    /// <summary>Removes an account (and its saved tokens), or just drops a demo row.</summary>
+    /// <summary>Removes an account (and its saved tokens/credentials) and rebuilds the sidebar.</summary>
     [RelayCommand]
     private async Task RemoveAccountAsync(AccountVM? account)
     {
         if (account is null) return;
         try
         {
-            var real = _config.Accounts.RemoveAll(a => a.Id == account.Id) > 0;
-            if (real)
-            {
+            var realGoogle = _config.Accounts.RemoveAll(a => a.Id == account.Id) > 0;
+            var realImap   = _config.ImapAccounts.RemoveAll(a => a.Id == account.Id) > 0;
+            if (realGoogle)
                 foreach (var k in _config.OAuthTokens.Keys.Where(k => k.Contains(account.Id)).ToList())
                     _config.OAuthTokens.Remove(k);
+            if (realGoogle || realImap)
+            {
                 PersistSettings();
-                StatusText = "Removed " + account.Email + ".";
                 await RefreshAccountsAsync();
+                StatusText = "Removed " + account.Email + ".";   // after refresh, so it isn't wiped
             }
             else
             {
-                Accounts.Remove(account);   // demo row
+                Accounts.Remove(account);   // not in config (stale row) — drop from the UI
                 if (ReferenceEquals(ActiveAccount, account))
                     ActiveAccount = Accounts.FirstOrDefault();
             }
@@ -276,25 +297,25 @@ public partial class MainViewModel : ObservableObject, IDisposable
             // PersistSettings never throws — a token write mid-OAuth can't kill the sign-in.
             _mail = new MailService(_config, PersistSettings);
 
-            if (!_mail.IsConfigured || _config.Accounts.Count == 0)
+            var haveGoogle = _mail.IsConfigured && _config.Accounts.Count > 0;
+            var haveImap   = _config.ImapAccounts.Count > 0;
+            if (!haveGoogle && !haveImap)
             {
-                IsDemoMode = true;
+                ShowWelcome = true;
                 StatusText = _mail.IsConfigured
                     ? "No accounts yet — click + to add a Gmail account."
-                    : "Add Google credentials to sign in (see README).";
-                LoadDemoData();
+                    : "Add Google credentials (see README), or add an IMAP/POP3 account from ⚙ Settings.";
                 return;
             }
 
-            IsDemoMode = false;
+            ShowWelcome = false;
             await RefreshAccountsAsync();
         }
         catch (Exception ex)
         {
             Log.Error("Bootstrap", ex);
             StatusText = "Startup problem: " + ex.Message;
-            IsDemoMode = true;
-            LoadDemoData();
+            ShowWelcome = true;
         }
     }
 
@@ -302,7 +323,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task RefreshAccountsAsync()
     {
-        if (_mail is null || !_mail.IsConfigured) return;
+        // No config guard here: refresh must also run when the LAST account was just
+        // removed, so it can tear down the stale sidebar/sessions and show the welcome card.
+        if (_mail is null) return;
 
         IsBusy = true;
         StatusText = "Signing in…";
@@ -311,7 +334,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             foreach (var s in _sessions) s.Dispose();
             _sessions.Clear();
-            _sessions.AddRange(await _mail.RestoreSessionsAsync());
+            var (restored, failures) = await _mail.RestoreSessionsAsync();
+            _sessions.AddRange(restored);
 
             Accounts.Clear();
             foreach (var session in _sessions)
@@ -320,13 +344,27 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 var display = string.IsNullOrWhiteSpace(session.Account.DisplayName)
                     ? session.Account.EmailAddress
                     : session.Account.DisplayName;
+                var tag = session.Client switch
+                {
+                    Pop3MailClient => "POP3",
+                    ImapMailClient => "IMAP",
+                    _ => "",
+                };
 
-                var avm = new AccountVM(session.Account.Id, session.Account.EmailAddress, display,
-                    onActivate: () => ActiveAccount = null); // set below to the real vm
+                var avm = new AccountVM(session.Account.Id, session.Account.EmailAddress, display, tag);
                 avm.SetActivateTarget(() => ActiveAccount = avm);
                 avm.SetRemoveTarget(() => _ = RemoveAccountAsync(avm));
 
-                var folders = await session.Client.FoldersAsync();
+                // One unreachable server must not sink the whole refresh.
+                List<MailFolder> folders;
+                try { folders = await session.Client.FoldersAsync(); }
+                catch (Exception ex)
+                {
+                    Log.Error("Folders " + session.Account.EmailAddress, ex);
+                    failures.Add(session.Account.EmailAddress);
+                    folders = new List<MailFolder>();
+                }
+
                 foreach (var f in folders)
                 {
                     var labelId = f.LabelId;
@@ -339,18 +377,54 @@ public partial class MainViewModel : ObservableObject, IDisposable
             }
 
             ActiveAccount = Accounts.Count > 0 ? Accounts[0] : null;
-            if (_sessions.Count > 0) await LoadFolderAsync(_sessions[0], "INBOX");
-            StatusText = "";
+            if (_sessions.Count > 0)
+            {
+                await LoadFolderAsync(_sessions[0], "INBOX");
+            }
+            else
+            {
+                _activeSession = null;   // old reference was just disposed above
+                Threads.Clear();
+                SelectedThread = null;
+            }
+            // Welcome card tracks reality on every refresh — this both shows it after
+            // the last account is removed and clears a stale latch after a recovery.
+            ShowWelcome = _sessions.Count == 0;
+            StatusText = failures.Count > 0 ? "Couldn't reach: " + string.Join(", ", failures) : "";
             StartPush();
             StartPolling();
         }
         catch (Exception ex)
         {
             StatusText = "Sign-in failed: " + ex.Message;
-            IsDemoMode = true;
-            LoadDemoData();
+            if (Accounts.Count == 0) ShowWelcome = true;
         }
         finally { IsBusy = false; }
+    }
+
+    /// <summary>
+    /// Adds (or replaces) a non-Google IMAP/POP3 account. The dialog has already
+    /// verified the credentials against both servers before this is called.
+    /// </summary>
+    public async Task<bool> AddImapAccountAsync(ImapAccountConfig cfg)
+    {
+        if (_config.ImapAccounts.Count >= 10)
+        {
+            StatusText = "IMAP/POP3 account limit reached (10).";
+            return false;
+        }
+
+        // Re-adding the same address+protocol replaces the old entry.
+        _config.ImapAccounts.RemoveAll(a =>
+            string.Equals(a.EmailAddress, cfg.EmailAddress, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(a.Protocol, cfg.Protocol, StringComparison.OrdinalIgnoreCase));
+        _config.ImapAccounts.Add(cfg);
+        PersistSettings();
+
+        ShowWelcome = false;
+        StatusText = "Added " + cfg.EmailAddress + ".";
+        await RefreshAccountsAsync();
+        return true;
     }
 
     /// <summary>Interactive add of a new Gmail account (opens the system browser once).</summary>
@@ -369,7 +443,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             await _mail.AddAccountAsync();  // persists the account into _config
             _vault.Save(_config);           // encrypt the new account + its refresh token
-            IsDemoMode = false;
+            ShowWelcome = false;
             await RefreshAccountsAsync();
         }
         catch (Exception ex)
@@ -416,11 +490,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_contactSuggestions is not null) return _contactSuggestions;
         var result = new List<string>();
-        if (_activeSession is not null)
+        if (_activeSession?.Gmail is { } gmail)   // People API is Google-only
         {
             try
             {
-                using var contacts = new ContactsClient(_activeSession.Client.Credential);
+                using var contacts = new ContactsClient(gmail.Credential);
                 var list = await contacts.LoadAsync();
                 result = list.Select(c => c.Display).ToList();
             }
@@ -433,9 +507,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Lets views surface a status message (attachment saved, errors, etc.).</summary>
     public void NotifyStatus(string message) => StatusText = message;
 
-    /// <summary>A Drive client for the active account, used by the compose "from Drive" picker.</summary>
+    /// <summary>A Drive client for the active account (Google-only), used by the compose "from Drive" picker.</summary>
     public DriveClient? CreateDriveClientForActive() =>
-        _activeSession is null ? null : new DriveClient(_activeSession.Client.Credential);
+        _activeSession?.Gmail is { } gmail ? new DriveClient(gmail.Credential) : null;
 
     /// <summary>Starts Gmail push (Pub/Sub) for every signed-in account if enabled + configured.</summary>
     private void StartPush()
@@ -452,7 +526,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
-            var clients = _sessions.Select(x => x.Client).ToList();
+            // Pub/Sub push is a Gmail feature; IMAP/POP3 accounts rely on the poller.
+            var clients = _sessions.Select(x => x.Gmail).OfType<GmailClient>().ToList();
+            if (clients.Count == 0) return;
             _push = new PushWatchService(clients, s.PubSubTopic, s.PubSubSubscription);
             _push.MailArrived += email => Dispatcher.UIThread.Post(() => _ = GuardAsync(OnPushAsync(email), "Push"));
             _ = GuardAsync(_push.StartAsync(), "PushStart");
@@ -485,7 +561,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Refreshes one account's folder unread counts and notifies on new mail.</summary>
-    private async Task RefreshUnreadAsync(GmailAccountSession session)
+    private async Task RefreshUnreadAsync(MailAccountSession session)
     {
         var avm = Accounts.FirstOrDefault(a => a.Id == session.Account.Id);
         try
@@ -505,7 +581,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Fires a corner notification when an account's inbox unread count goes up.</summary>
-    private async Task MaybeNotifyAsync(GmailAccountSession session, int inboxUnread)
+    private async Task MaybeNotifyAsync(MailAccountSession session, int inboxUnread)
     {
         var id = session.Account.Id;
         var had = _lastInboxUnread.TryGetValue(id, out var prev);
@@ -550,7 +626,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         _pollTimer.Stop();
         _pollTimer.Interval = TimeSpan.FromSeconds(Math.Max(30, _config.Settings.PollIntervalSeconds));
-        if (_sessions.Count > 0 && !IsDemoMode) _pollTimer.Start();
+        if (_sessions.Count > 0 && !ShowWelcome) _pollTimer.Start();
     }
 
     private async Task PollTickAsync()
@@ -579,93 +655,95 @@ public partial class MainViewModel : ObservableObject, IDisposable
         _sessions.Clear();
     }
 
-    private async Task LoadFolderAsync(GmailAccountSession session, string labelId)
+    private int _threadLoadSeq;   // discards a slow load that a newer click superseded
+
+    private async Task LoadFolderAsync(MailAccountSession session, string labelId)
     {
+        var seq = ++_threadLoadSeq;
         _activeSession = session;
         _activeLabelId = labelId;
         IsBusy = true;
         try
         {
             var threads = await session.Client.ListThreadsAsync(labelId, 20);
-            Threads.Clear();
-            foreach (var t in threads)
-                Threads.Add(new ThreadVM(t, session, _sanitizer, _config.Settings.BlockRemoteContent));
-            SelectedThread = Threads.Count > 0 ? Threads[0] : null;
+            if (seq == _threadLoadSeq) PopulateThreads(session, threads);
         }
         catch (Exception ex) { StatusText = "Couldn't load conversations: " + ex.Message; }
         finally { IsBusy = false; }
     }
 
-    // ---- setup / demo ---------------------------------------------------
+    /// <summary>
+    /// Rebuilds the conversation list, keeping the current selection when the same
+    /// conversation is still present — so a background refresh (push/poll) doesn't
+    /// yank the user off the thread they're reading.
+    /// </summary>
+    private void PopulateThreads(MailAccountSession session, List<EmailThreadSummary> threads)
+    {
+        var keepId = SelectedThread?.Id;
+        Threads.Clear();
+        foreach (var t in threads)
+            Threads.Add(new ThreadVM(t, session, _sanitizer, _config.Settings.BlockRemoteContent));
+        SelectedThread = (keepId is { Length: > 0 } ? Threads.FirstOrDefault(t => t.Id == keepId) : null)
+                         ?? Threads.FirstOrDefault();
+    }
+
+    // ---- top-bar search -------------------------------------------------
+
+    [ObservableProperty] private string _searchQuery = "";
+
+    /// <summary>
+    /// Runs a Gmail search (full gmail.com query syntax) over the active account.
+    /// An empty query returns to the folder that was open.
+    /// </summary>
+    [RelayCommand]
+    private async Task SearchAsync()
+    {
+        if (_activeSession is null || ShowWelcome)
+        {
+            StatusText = "Sign in to search your mail.";
+            return;
+        }
+
+        var query = SearchQuery?.Trim() ?? "";
+        if (query.Length == 0)
+        {
+            await LoadFolderAsync(_activeSession, _activeLabelId);
+            return;
+        }
+
+        var session = _activeSession;
+        var seq = ++_threadLoadSeq;
+        IsBusy = true;
+        try
+        {
+            var threads = await session.Client.SearchThreadsAsync(query, 20);
+            if (seq != _threadLoadSeq) return;
+            PopulateThreads(session, threads);
+            StatusText = threads.Count == 0
+                ? "No results for “" + query + "”."
+                : threads.Count + " result(s) — clear the search box and press Enter to go back.";
+        }
+        catch (Exception ex) { StatusText = "Search failed: " + ex.Message; }
+        finally { IsBusy = false; }
+    }
+
+    // ---- setup ------------------------------------------------------------
 
     private void BuildServiceTabs()
     {
         ServiceTabs.Add(new ServiceTabVM("Mail",       ServiceKind.Mail));
         ServiceTabs.Add(new ServiceTabVM("Drive",      ServiceKind.Browser,  "https://drive.google.com"));
+        ServiceTabs.Add(new ServiceTabVM("Calendar",   ServiceKind.Browser,  "https://calendar.google.com"));
         ServiceTabs.Add(new ServiceTabVM("Gemini",     ServiceKind.Browser,  "https://gemini.google.com"));
         ServiceTabs.Add(new ServiceTabVM("Gemini CLI", ServiceKind.Terminal));
+        ServiceTabs.Add(new ServiceTabVM("Keep",       ServiceKind.Browser,  "https://keep.google.com"));
+        ServiceTabs.Add(new ServiceTabVM("Photos",     ServiceKind.Browser,  "https://photos.google.com"));
+        ServiceTabs.Add(new ServiceTabVM("Docs",       ServiceKind.Browser,  "https://docs.google.com"));
+        ServiceTabs.Add(new ServiceTabVM("YouTube",    ServiceKind.Browser,  "https://www.youtube.com"));
         ServiceTabs.Add(new ServiceTabVM("Browser",    ServiceKind.Browser,  "https://myaccount.google.com"));
         SelectedTab = ServiceTabs[0];
     }
 
-    private void LoadDemoData()
-    {
-        Accounts.Clear();
-        Threads.Clear();
-
-        var primary = new AccountVM("demo-primary", "you@gmail.com", "You");
-        primary.SetActivateTarget(() => ActiveAccount = primary);
-        primary.SetRemoveTarget(() => _ = RemoveAccountAsync(primary));
-        primary.Folders.Add(new FolderVM("Inbox", 3));
-        primary.Folders.Add(new FolderVM("Starred", 0));
-        primary.Folders.Add(new FolderVM("Sent", 0));
-        primary.Folders.Add(new FolderVM("Drafts", 1));
-        Accounts.Add(primary);
-
-        var work = new AccountVM("demo-work", "work@gmail.com", "Work");
-        work.SetActivateTarget(() => ActiveAccount = work);
-        work.SetRemoveTarget(() => _ = RemoveAccountAsync(work));
-        work.Folders.Add(new FolderVM("Inbox", 12));
-        work.Folders.Add(new FolderVM("Starred", 2));
-        Accounts.Add(work);
-
-        ActiveAccount = primary;
-
-        Threads.Add(new ThreadVM("GitHub", "GitHub", "main #482 finished in 2m 14s",
-            DateTimeOffset.Now.AddMinutes(-4), unread: true, starred: false, new[]
-            {
-                new MessageVM("GitHub", "Your build passed", "main #482 finished in 2m 14s",
-                    DateTimeOffset.Now.AddMinutes(-4), true),
-            }));
-
-        Threads.Add(new ThreadVM("Google", "Google", "New sign-in on Windows",
-            DateTimeOffset.Now.AddHours(-2), unread: true, starred: true, new[]
-            {
-                new MessageVM("Google", "Security alert", "New sign-in on Windows",
-                    DateTimeOffset.Now.AddHours(-2), true),
-            }));
-
-        // A multi-message conversation to show threading + the conversation strip.
-        Threads.Add(new ThreadVM("Alex Rivera, You", "Alex Rivera", "Sounds good — shipping it 🚀",
-            DateTimeOffset.Now.AddHours(-5), unread: false, starred: false, new[]
-            {
-                new MessageVM("Alex Rivera", "Re: Design review", "Can you take a look at the new layout?",
-                    DateTimeOffset.Now.AddHours(-7), false),
-                new MessageVM("You", "Re: Design review", "Looks great, one note on the spacing.",
-                    DateTimeOffset.Now.AddHours(-6), false),
-                new MessageVM("Alex Rivera", "Re: Design review", "Sounds good — shipping it 🚀",
-                    DateTimeOffset.Now.AddHours(-5), false),
-            }));
-
-        Threads.Add(new ThreadVM("Stripe", "Stripe", "You received a payment of $240.00",
-            DateTimeOffset.Now.AddHours(-9), unread: false, starred: false, new[]
-            {
-                new MessageVM("Stripe", "Payment received", "You received a payment of $240.00",
-                    DateTimeOffset.Now.AddHours(-9), false),
-            }));
-
-        SelectedThread = Threads.Count > 0 ? Threads[0] : null;
-    }
 }
 
 // ---- item view models ---------------------------------------------------
@@ -686,6 +764,8 @@ public partial class AccountVM : ObservableObject
     public string Id      { get; }
     public string Email   { get; }
     public string Display { get; }
+    /// <summary>"IMAP" / "POP3" badge for non-Google accounts; empty for Google.</summary>
+    public string Tag     { get; }
     public string Initial => string.IsNullOrEmpty(Display) ? "?" : Display.Substring(0, 1).ToUpperInvariant();
     public ObservableCollection<FolderVM> Folders { get; } = new();
     [ObservableProperty] private bool _isExpanded = true;
@@ -693,8 +773,8 @@ public partial class AccountVM : ObservableObject
     private Action? _onActivate;
     private Action? _onRemove;
 
-    public AccountVM(string id, string email, string display, Action? onActivate = null)
-    { Id = id; Email = email; Display = display; _onActivate = onActivate; }
+    public AccountVM(string id, string email, string display, string tag = "", Action? onActivate = null)
+    { Id = id; Email = email; Display = display; Tag = tag; _onActivate = onActivate; }
 
     /// <summary>Lets the owner point activation at the finished VM instance.</summary>
     public void SetActivateTarget(Action onActivate) => _onActivate = onActivate;
@@ -744,6 +824,7 @@ public partial class MessageVM : ObservableObject
     // Raw fields used to build replies / forwards.
     public string FromRaw         { get; } = "";
     public string ToRaw           { get; } = "";
+    public string CcRaw           { get; } = "";
     public string ThreadId        { get; } = "";
     public string Rfc822MessageId { get; } = "";
     public string QuoteText       { get; } = "";
@@ -792,6 +873,7 @@ public partial class MessageVM : ObservableObject
 
         FromRaw         = m.From;
         ToRaw           = m.To;
+        CcRaw           = m.Cc;
         ThreadId        = m.ThreadId;
         Rfc822MessageId = m.Rfc822MessageId;
         QuoteText       = string.IsNullOrWhiteSpace(m.PlainBody) ? m.Snippet : m.PlainBody;
@@ -799,13 +881,6 @@ public partial class MessageVM : ObservableObject
         if (getAttachment is not null)
             foreach (var a in m.Attachments)
                 Attachments.Add(new AttachmentVM(a, getAttachment));
-    }
-
-    /// <summary>Demo constructor (no backing Gmail message).</summary>
-    public MessageVM(string sender, string subject, string snippet, DateTimeOffset date, bool unread)
-    {
-        Id = ""; Sender = sender; Subject = subject; Snippet = snippet; Date = date;
-        _isUnread = unread; _bodyText = snippet; _remoteBlocked = false;
     }
 
     /// <summary>"Show images" — re-sanitize keeping remote URLs and let the reader load them.</summary>
@@ -874,13 +949,13 @@ public partial class ThreadVM : ObservableObject
     public ObservableCollection<MessageVM> Messages { get; } = new();
     [ObservableProperty] private MessageVM? _selectedMessage;
 
-    private readonly GmailAccountSession? _session;
+    private readonly MailAccountSession? _session;
     private readonly HtmlSanitizerService? _sanitizer;
     private readonly bool _blockRemote;
     private readonly string _lastMessageId = "";
 
-    /// <summary>Live conversation summary from Gmail (messages fetched on open).</summary>
-    public ThreadVM(EmailThreadSummary s, GmailAccountSession session,
+    /// <summary>Live conversation summary (messages fetched on open).</summary>
+    public ThreadVM(EmailThreadSummary s, MailAccountSession session,
                     HtmlSanitizerService sanitizer, bool blockRemote)
     {
         Id = s.Id; Subject = s.Subject; Participants = s.Participants; Snippet = s.Snippet;
@@ -889,22 +964,10 @@ public partial class ThreadVM : ObservableObject
         _session = session; _sanitizer = sanitizer; _blockRemote = blockRemote;
     }
 
-    /// <summary>Demo conversation with pre-built messages.</summary>
-    public ThreadVM(string participants, string leadSender, string snippet, DateTimeOffset date,
-                    bool unread, bool starred, IEnumerable<MessageVM> messages)
-    {
-        Participants = string.IsNullOrWhiteSpace(participants) ? leadSender : participants;
-        Snippet = snippet; Date = date; _isUnread = unread; _isStarred = starred;
-        foreach (var m in messages) Messages.Add(m);
-        Count = Messages.Count;
-        Subject = Messages.Count > 0 ? Messages[0].Subject : "(no subject)";
-        SelectedMessage = Messages.Count > 0 ? Messages[^1] : null;
-        _loaded = true;
-    }
-
     /// <summary>Loads the full conversation on first open and marks unread messages read.</summary>
     public async Task OpenAsync()
     {
+        if (IsLoading) return;   // rapid re-select while the first open is in flight
         if (_loaded || _session is null)
         {
             if (SelectedMessage is null && Messages.Count > 0) SelectedMessage = Messages[^1];

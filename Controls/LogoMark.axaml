@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Googlook.Controls.LogoMark">
+
+  <!-- Googlook's own mark: an envelope with the red flap. Deliberately NOT the
+       Gmail "M" logo — that's Google's trademark; this is an original design that
+       just speaks the same visual language. -->
+  <Viewbox Stretch="Uniform">
+    <Canvas Width="96" Height="72">
+      <Border Canvas.Left="0" Canvas.Top="0" Width="96" Height="72"
+              CornerRadius="10" Background="White"
+              BorderBrush="#DADCE0" BorderThickness="2"/>
+      <Path Data="M 10,16 L 48,46 L 86,16"
+            Stroke="#C5221F" StrokeThickness="9"
+            StrokeLineCap="Round" StrokeJoin="Round"/>
+    </Canvas>
+  </Viewbox>
+</UserControl>

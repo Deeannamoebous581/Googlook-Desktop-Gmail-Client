@@ -16,7 +16,7 @@ namespace Googlook.Services;
 /// (never the gmail.com web page), Google's web-app trackers are simply never
 /// loaded. In-email tracking pixels are stripped later by HtmlSanitizerService.
 /// </summary>
-public sealed class GmailClient : IDisposable
+public sealed class GmailClient : IMailClient
 {
     private readonly GmailService _svc;
     private readonly UserCredential _credential;
@@ -24,15 +24,27 @@ public sealed class GmailClient : IDisposable
     /// <summary>The OAuth credential behind this client (reused by the push service for Pub/Sub).</summary>
     public UserCredential Credential => _credential;
 
-    public GmailClient(UserCredential credential, string appName = "Googlook")
+    private GmailClient(UserCredential credential, GmailService svc, string userEmail)
     {
         _credential = credential;
-        _svc = new GmailService(new BaseClientService.Initializer
+        _svc = svc;
+        UserEmail = userEmail;
+    }
+
+    /// <summary>
+    /// Creates a client and resolves the account's email address. Async so the
+    /// profile fetch never blocks the UI thread (construction happens on it after
+    /// the OAuth await resumes there).
+    /// </summary>
+    public static async Task<GmailClient> CreateAsync(UserCredential credential, string appName = "Googlook")
+    {
+        var svc = new GmailService(new BaseClientService.Initializer
         {
             HttpClientInitializer = credential,
             ApplicationName = appName,
         });
-        UserEmail = _svc.Users.GetProfile("me").Execute().EmailAddress;
+        var email = (await svc.Users.GetProfile("me").ExecuteAsync()).EmailAddress;
+        return new GmailClient(credential, svc, email);
     }
 
     public async Task<List<EmailMessage>> ListAsync(string labelId = "INBOX", int max = 50)
@@ -102,16 +114,21 @@ public sealed class GmailClient : IDisposable
     private static string BuildMime(string from, string to, string subject, string body, bool isHtml,
                                     IReadOnlyList<OutgoingAttachment>? attachments, string? inReplyTo = null)
     {
+        // Every header value is CRLF-stripped first. Reply headers (In-Reply-To) and
+        // recipients come from *received* mail, so a crafted Message-Id like
+        // "<x>\r\nBcc: attacker@evil" must not be able to smuggle extra headers
+        // into the outgoing message.
         var sb = new StringBuilder();
-        sb.Append("From: ").Append(from).Append("\r\n");
-        sb.Append("To: ").Append(to).Append("\r\n");
+        sb.Append("From: ").Append(CleanHeader(from)).Append("\r\n");
+        sb.Append("To: ").Append(CleanHeader(to)).Append("\r\n");
         sb.Append("Subject: ").Append(EncodeHeader(subject)).Append("\r\n");
         sb.Append("Date: ").Append(DateTime.UtcNow.ToString("r")).Append("\r\n");
         sb.Append("MIME-Version: 1.0\r\n");
         if (!string.IsNullOrEmpty(inReplyTo))
         {
-            sb.Append("In-Reply-To: ").Append(inReplyTo).Append("\r\n");
-            sb.Append("References: ").Append(inReplyTo).Append("\r\n");
+            var replyRef = CleanHeader(inReplyTo);
+            sb.Append("In-Reply-To: ").Append(replyRef).Append("\r\n");
+            sb.Append("References: ").Append(replyRef).Append("\r\n");
         }
 
         var bodyB64 = ChunkBase64(Convert.ToBase64String(Encoding.UTF8.GetBytes(body)));
@@ -136,7 +153,8 @@ public sealed class GmailClient : IDisposable
         // Attachment parts
         foreach (var a in attachments)
         {
-            var name = EncodeHeader(a.Filename);
+            // Quotes would escape the quoted filename="" context; swap them out.
+            var name = EncodeHeader(a.Filename.Replace('"', '\''));
             sb.Append("--").Append(boundary).Append("\r\n");
             sb.Append("Content-Type: ").Append(a.MimeType).Append("; name=\"").Append(name).Append("\"\r\n");
             sb.Append("Content-Disposition: attachment; filename=\"").Append(name).Append("\"\r\n");
@@ -154,8 +172,21 @@ public sealed class GmailClient : IDisposable
         return true;
     }
 
-    private static string EncodeHeader(string s) =>
-        IsAscii(s) ? s : "=?UTF-8?B?" + Convert.ToBase64String(Encoding.UTF8.GetBytes(s)) + "?=";
+    /// <summary>Removes CR/LF and other control characters so a value can't break out of its header line.</summary>
+    private static string CleanHeader(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        var sb = new StringBuilder(s.Length);
+        foreach (var c in s)
+            sb.Append(c is '\r' or '\n' || (char.IsControl(c) && c != '\t') ? ' ' : c);
+        return sb.ToString().Trim();
+    }
+
+    private static string EncodeHeader(string s)
+    {
+        s = CleanHeader(s);
+        return IsAscii(s) ? s : "=?UTF-8?B?" + Convert.ToBase64String(Encoding.UTF8.GetBytes(s)) + "?=";
+    }
 
     private static string ChunkBase64(string b64)
     {
@@ -235,6 +266,23 @@ public sealed class GmailClient : IDisposable
         if (resp.Threads is null) return new List<EmailThreadSummary>();
 
         // One metadata fetch per thread (concurrent) gives subject/participants/counts.
+        var summaries = await Task.WhenAll(resp.Threads.Select(t => SummariseThreadAsync(t.Id)));
+        return summaries.ToList();
+    }
+
+    /// <summary>
+    /// Searches conversations across the whole mailbox using Gmail's query syntax
+    /// (the same strings the gmail.com search box takes, e.g. "from:amy has:attachment").
+    /// </summary>
+    public async Task<List<EmailThreadSummary>> SearchThreadsAsync(string query, int max = 20)
+    {
+        var req = _svc.Users.Threads.List("me");
+        req.Q = query;
+        req.MaxResults = max;
+
+        var resp = await req.ExecuteAsync();
+        if (resp.Threads is null) return new List<EmailThreadSummary>();
+
         var summaries = await Task.WhenAll(resp.Threads.Select(t => SummariseThreadAsync(t.Id)));
         return summaries.ToList();
     }
@@ -323,6 +371,7 @@ public sealed class GmailClient : IDisposable
             ThreadId  = msg.ThreadId,
             From      = Header("From"),
             To        = Header("To"),
+            Cc        = Header("Cc"),
             Subject   = Header("Subject"),
             Snippet   = System.Net.WebUtility.HtmlDecode(msg.Snippet ?? ""),
             Date      = DateTimeOffset.FromUnixTimeMilliseconds(msg.InternalDate ?? 0),

@@ -1,0 +1,68 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Googlook.Views.AddImapAccountWindow"
+        x:CompileBindings="False"
+        Width="520" Height="640" Title="Add IMAP/POP3 account"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource Panel}">
+
+  <ScrollViewer>
+    <StackPanel Margin="20" Spacing="10">
+      <TextBlock Text="Non-Google email account" FontSize="16" FontWeight="600"/>
+      <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                 Text="Works with any provider that offers IMAP or POP3 (Outlook.com, Yahoo, Fastmail, your own server…). Many providers require an app-specific password for IMAP — check their help pages. Credentials are stored in the encrypted vault."/>
+
+      <TextBlock Text="Email address" FontSize="12" Margin="0,6,0,0"/>
+      <TextBox x:Name="EmailBox" Watermark="you@example.com" LostFocus="OnEmailLostFocus"/>
+
+      <TextBlock Text="Display name (optional)" FontSize="12"/>
+      <TextBox x:Name="NameBox" Watermark="Shown on outgoing mail"/>
+
+      <TextBlock Text="Password" FontSize="12"/>
+      <TextBox x:Name="PasswordBox" PasswordChar="●" Watermark="Password or app password"/>
+
+      <TextBlock Text="Username (only if different from the email address)" FontSize="12"/>
+      <TextBox x:Name="UserBox" Watermark="Usually left empty"/>
+
+      <Border Height="1" Background="{DynamicResource Divider}" Margin="0,6"/>
+
+      <Grid ColumnDefinitions="*,12,*">
+        <StackPanel Grid.Column="0" Spacing="6">
+          <TextBlock Text="Incoming protocol" FontSize="12"/>
+          <ComboBox x:Name="ProtocolBox" SelectedIndex="0" HorizontalAlignment="Stretch"
+                    SelectionChanged="OnProtocolChanged">
+            <ComboBoxItem Content="IMAP (recommended)"/>
+            <ComboBoxItem Content="POP3 (inbox only)"/>
+          </ComboBox>
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="6">
+          <TextBlock Text="Incoming port" FontSize="12"/>
+          <TextBox x:Name="InPortBox" Text="993"/>
+        </StackPanel>
+      </Grid>
+
+      <TextBlock Text="Incoming server" FontSize="12"/>
+      <TextBox x:Name="InHostBox" Watermark="imap.example.com"/>
+
+      <Grid ColumnDefinitions="*,12,*">
+        <StackPanel Grid.Column="0" Spacing="6">
+          <TextBlock Text="SMTP server (outgoing)" FontSize="12"/>
+          <TextBox x:Name="SmtpHostBox" Watermark="smtp.example.com"/>
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="6">
+          <TextBlock Text="SMTP port" FontSize="12"/>
+          <TextBox x:Name="SmtpPortBox" Text="587"/>
+        </StackPanel>
+      </Grid>
+
+      <TextBlock x:Name="ErrorText" Foreground="{DynamicResource AccentText}" FontSize="12"
+                 TextWrapping="Wrap"/>
+      <ProgressBar x:Name="Busy" IsIndeterminate="True" IsVisible="False" Height="3"/>
+
+      <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,8,0,0">
+        <Button Grid.Column="1" Content="Cancel" Padding="18,8" Click="OnCancel"/>
+        <Button Grid.Column="2" x:Name="AddButton" Content="Test &amp; add" Padding="22,8" Margin="10,0,0,0"
+                Background="{DynamicResource ComposeBg}" Click="OnTestAndAdd"/>
+      </Grid>
+    </StackPanel>
+  </ScrollViewer>
+</Window>

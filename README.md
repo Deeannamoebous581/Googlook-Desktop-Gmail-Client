@@ -2,8 +2,10 @@
 
 A Windows email client in the spirit of Outlook/Thunderbird, styled like the Gmail
 web app, built on **Avalonia + C# (.NET 8)**. It manages up to ~10 Gmail accounts
-from one native window, with tabs for Drive, Gemini, a Gemini CLI terminal, and a
-per-account browser — and a passcode lock that encrypts everything at rest.
+**plus up to 10 non-Google accounts over IMAP/POP3** (MailKit) from one native
+window, with tabs for Drive, Calendar, Gemini, Keep, Photos, Docs, YouTube, a
+Gemini CLI terminal, and a per-account browser — and a passcode lock that encrypts
+everything at rest.
 
 This repository is a **working foundation**, not a finished product. It nails the
 architecture and the security-critical parts, and clearly marks the integration
@@ -50,7 +52,7 @@ browser tabs = persistent per-account WebView2 `UserDataFolder`s.
   **Remove** button and an **＋ Add Google account** button (same as the sidebar ＋).
 - **Gmail-styled Avalonia shell** — top bar + search, top service tabs, and the
   three-pane mail view (accounts cascading into folders, message list, reading
-  pane). Falls back to demo data (shown with a "Demo data" pill) until you sign in.
+  pane). Shows a welcome card until the first account is added — no dummy data.
 - **Live Gmail, wired end-to-end** (`Services/MailService.cs` + `MainViewModel`) —
   **+ Add account** runs OAuth in your browser; the sidebar then shows real accounts,
   real folders with live unread counts, and real messages. Clicking a folder loads
@@ -73,9 +75,25 @@ browser tabs = persistent per-account WebView2 `UserDataFolder`s.
   + `MaybeNotifyAsync`) — new mail raises a bottom-right toast. An interval poller
   (and push, if enabled) detect inbox increases per account; the **"Hide sender &
   subject"** toggle makes toasts say only that new mail arrived. Both toggles live in ⚙ Settings.
+- **Non-Google accounts over IMAP/POP3** (`Services/ImapMailClient.cs` /
+  `Pop3MailClient.cs` / `MailKitCommon.cs`, via **MailKit**) — up to 10 accounts from
+  any provider: **⚙ Settings → ＋ Add IMAP/POP3 account**, fill in the servers (hosts
+  are pre-guessed from the address), and **Test & add** verifies both the incoming and
+  SMTP logins before saving. Credentials live in the encrypted vault. **No Google Cloud
+  setup is needed for these accounts.** Deliberate limits: no conversation threading
+  (each message stands alone), IMAP search covers Subject+From in the Inbox, sent mail
+  is best-effort appended to the IMAP Sent folder, and POP3 is inbox-only with no
+  flags or search. Gmail-only extras (push, contacts autocomplete, attach-from-Drive)
+  quietly disable for these accounts; the interval poller covers new-mail checks.
+- **Top-bar search** (`GmailClient.SearchThreadsAsync` + the search box) — full Gmail
+  query syntax (`from:amy has:attachment`, etc.) against the active account. Enter
+  searches, Esc clears and returns to the folder you were in. (IMAP accounts search
+  Subject+From; POP3 has no search.)
 - **Reply / Reply-all / Forward** (per-message actions in the reader) — Reply and
-  Reply-all prefill recipients and a quoted body and thread correctly (`threadId` +
-  `In-Reply-To`/`References`); Forward re-attaches the originals. Recipients autocomplete.
+  Reply-all prefill recipients (From + To + Cc, quoted-name aware, self-filtered) and a
+  quoted body and thread correctly (`threadId` + `In-Reply-To`/`References`); Forward
+  re-attaches the originals. Recipients autocomplete. Outgoing MIME headers are
+  CRLF-stripped so a crafted incoming `Message-Id` can't smuggle headers into a reply.
 - **Contacts autocomplete** (`Services/ContactsClient.cs`, People API) — the Compose
   "To" field suggests from your saved and auto-saved contacts.
 - **Inline images** (`GmailClient.BuildDisplayHtmlAsync`) — `cid:` embedded images are
@@ -96,8 +114,10 @@ browser tabs = persistent per-account WebView2 `UserDataFolder`s.
   polling stays as the fallback.
 - **Full HTML email rendering** (`Controls/HtmlMessageView.cs`) — the reading pane
   renders the sanitized body in a **JS-disabled** WebView2 with **all network blocked**
-  (defense in depth over the sanitizer) and links opened in your real browser. Falls
-  back to the snippet if the WebView2 runtime is absent.
+  (defense in depth over the sanitizer) and links opened in your real browser —
+  **http/https/mailto only**, so a hostile email can't launch `file://`, UNC paths, or
+  arbitrary registered URI handlers through a click. Falls back to the snippet if the
+  WebView2 runtime is absent.
 - **Embedded browser tabs** (`Controls/BrowserView.cs`) — Drive / Gemini / My Account
   run in an embedded Chromium browser (WebView2 — the same engine as Chrome, with the
   Edge user-agent Google accepts for sign-in), each with a per-account profile folder so
@@ -112,19 +132,19 @@ browser tabs = persistent per-account WebView2 `UserDataFolder`s.
 - **OAuth loopback flow** (`Services/GoogleAuthService.cs`) + **zero-config credential
   loading** (`Services/GoogleClientLoader.cs`).
 - **Interval poller** (`Services/MailPoller.cs`) — Thunderbird-style checks.
-- **Tracker/remote-content sanitizer** (`Services/HtmlSanitizerService.cs`).
+- **Tracker/remote-content sanitizer** (`Services/HtmlSanitizerService.cs`) —
+  allow-list based: in blocked mode only `cid:`/`data:` references survive, covering
+  `src`, `srcset`, `poster`, `background`, `formaction`, and inline-style `url()`
+  beacons (case tricks, whitespace, and protocol-relative `//host` URLs included).
 
 **Remaining polish (not blockers)**
 
-1. **Top-bar search** — the search box is a visual placeholder; wiring it to
-   `messages.list?q=` is a small addition.
-2. **Terminal VT edge cases** — the emulator covers the common subset. Truecolour
+1. **Terminal VT edge cases** — the emulator covers the common subset. Truecolour
    collapses to default, the alternate-screen buffer is approximated by clearing, and
    there's no scrollback history.
-3. **Conversation cost** — the thread list does one `threads.get` (metadata) per thread
+2. **Conversation cost** — the thread list does one `threads.get` (metadata) per thread
    on folder load, capped at 20; batching or caching would cut requests.
-4. **Reply-all Cc** — Cc recipients aren't parsed yet, so Reply-all covers From + To.
-5. **Large inline images** — bodies render via `NavigateToString` (~2 MB cap); a very
+3. **Large inline images** — bodies render via `NavigateToString` (~2 MB cap); a very
    large embedded image could exceed it (rare for signatures/logos).
 
 ---
@@ -148,7 +168,9 @@ browser tabs = persistent per-account WebView2 `UserDataFolder`s.
 
 ---
 
-## Google Cloud setup (one-time, for real mail)
+## Google Cloud setup (one-time, for Gmail accounts only)
+
+> IMAP/POP3 accounts skip all of this — add them straight from **⚙ Settings**.
 
 1. Go to the Google Cloud Console → create/select a project.
 2. **APIs & Services → Enable APIs** → enable **Gmail API**. Also enable **Drive API**
@@ -194,7 +216,7 @@ compiled automatically by the Avalonia MSBuild targets.
 dotnet run
 ```
 
-First launch shows the Gmail-like shell (with a **Demo data** pill until you sign in):
+First launch shows the splash, then the Gmail-like shell with a welcome card until you sign in:
 
 1. Make sure your Google credentials are in place (previous section).
 2. Click **＋ Add Google account** — in the sidebar, or in **Settings (⚙) → Accounts**.
@@ -242,7 +264,7 @@ Googlook/                          <- solution folder; Googlook.sln + Googlook.c
     DriveClient.cs                 Drive list/search + download (for "attach from Drive")
     ContactsClient.cs              People API contacts for compose autocomplete
   ViewModels/
-    MainViewModel.cs               shell state, lock flow, live-Gmail wiring, demo fallback
+    MainViewModel.cs               shell state, lock flow, live-mail wiring, welcome state
     Converters.cs                  unread weight / star colour / count visibility
   Views/
     MainWindow.axaml(.cs)          shell: top bar, service tabs, lock overlay
@@ -297,6 +319,11 @@ set up, the **interval poller** keeps working.
   `%AppData%\Googlook\googlook.log` — check it first, and include it when reporting a bug.
 - **Stuck or blank browser tab / email body:** verify the Edge **WebView2 Runtime** is
   installed; the browser tabs also have an **Open in Chrome** escape hatch.
+- **Black boxes where email bodies should be:** the reader now runs WebView2 with GPU
+  compositing off (`--disable-gpu`) and sizes it in physical pixels, which fixes the two
+  usual causes (VMs / RDP without hardware acceleration, and >100% display scaling). If
+  the **browser tabs** still render black in a VM, set the environment variable
+  `GOOGLOOK_DISABLE_GPU=1` and relaunch — that applies the same fix to them.
 - **Vault copied to another PC or Windows user:** DPAPI can't decrypt it there by design.
   The app starts fresh; sign the accounts in again (or use a passcode vault, which is
   portable).

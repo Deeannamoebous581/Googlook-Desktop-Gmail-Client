@@ -38,7 +38,13 @@ public sealed class MailPoller : IAsyncDisposable
     {
         while (!_cts.IsCancellationRequested)
         {
-            foreach (var (acct, client) in _accounts())
+            // Snapshot inside a try: if the account list is swapped/mutated mid-tick,
+            // the enumeration failure must not silently kill the whole poll loop.
+            List<(Account acct, GmailClient client)> accounts;
+            try { accounts = new List<(Account, GmailClient)>(_accounts()); }
+            catch { accounts = new(); }
+
+            foreach (var (acct, client) in accounts)
             {
                 try
                 {

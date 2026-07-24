@@ -75,9 +75,14 @@ public class BrowserView : NativeControlHost
     {
         try
         {
-            if (_controller is not null)
-                _controller.Bounds = new System.Drawing.Rectangle(
-                    0, 0, Math.Max(0, (int)Bounds.Width), Math.Max(0, (int)Bounds.Height));
+            if (_controller is null) return;
+            // Physical pixels, not Avalonia's logical units — at >100% display scale
+            // the unscaled size leaves an unpainted black band beside the page.
+            var scale = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
+            _controller.Bounds = new System.Drawing.Rectangle(
+                0, 0,
+                Math.Max(0, (int)Math.Ceiling(Bounds.Width * scale)),
+                Math.Max(0, (int)Math.Ceiling(Bounds.Height * scale)));
         }
         catch { /* controller mid-teardown */ }
     }
@@ -93,7 +98,13 @@ public class BrowserView : NativeControlHost
                 : ProfileDir!;
             System.IO.Directory.CreateDirectory(folder);
 
-            _env = await CoreWebView2Environment.CreateAsync(userDataFolder: folder);
+            // Real web apps (Drive/Gemini) keep GPU compositing; set GOOGLOOK_DISABLE_GPU=1
+            // if the tabs render as black boxes (VMs / RDP without hardware acceleration).
+            var opts = new CoreWebView2EnvironmentOptions();
+            var noGpu = Environment.GetEnvironmentVariable("GOOGLOOK_DISABLE_GPU");
+            if (noGpu is "1" or "true") opts.AdditionalBrowserArguments = "--disable-gpu";
+
+            _env = await CoreWebView2Environment.CreateAsync(null, folder, opts);
             _controller = await _env.CreateCoreWebView2ControllerAsync(_hwnd);
             _controller.DefaultBackgroundColor = System.Drawing.Color.White;
             _controller.IsVisible = true;
@@ -114,7 +125,13 @@ public class BrowserView : NativeControlHost
             _ready = true;
             NavigateToAddress();
         }
-        catch { /* WebView2 runtime missing — the fallback card shows through */ }
+        catch (Exception ex)
+        {
+            Googlook.Services.Log.Error("BrowserView init", ex);
+            // Hide the unpainted (black) native child so the fallback card
+            // behind it is actually visible.
+            Dispatcher.UIThread.Post(() => IsVisible = false);
+        }
     }
 
     private void NavigateToAddress()

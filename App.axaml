@@ -1,5 +1,7 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:Googlook.Views"
+             xmlns:ctl="using:Googlook.Controls"
              x:Class="Googlook.App"
              RequestedThemeVariant="Light">
 
@@ -50,10 +52,11 @@
   <Application.Styles>
     <FluentTheme />
 
-    <!-- Base look -->
+    <!-- Base look: embedded Roboto (the Gmail typeface) at Gmail's 14px body size -->
     <Style Selector="Window">
       <Setter Property="Background" Value="{DynamicResource Surface}"/>
-      <Setter Property="FontFamily" Value="Roboto, Segoe UI, sans-serif"/>
+      <Setter Property="FontFamily" Value="avares://Googlook/Assets/Fonts#Roboto, Segoe UI"/>
+      <Setter Property="FontSize" Value="14"/>
     </Style>
 
     <!-- Top service-tab strip: transparent items, subtle hover -->
@@ -77,6 +80,76 @@
     <Style Selector="ListBox.messages ListBoxItem">
       <Setter Property="Padding" Value="8,0"/>
       <Setter Property="MinHeight" Value="64"/>
+    </Style>
+
+    <!-- ============ Motion (deliberately conservative) ============
+         Only opacity keyframes + brush transitions: both are safe at runtime.
+         Transform-string keyframe animations are avoided on purpose — they are
+         the class of Avalonia animation that fails at runtime, not compile time.
+         Note the WebView2/terminal areas are native windows and ignore opacity;
+         the surrounding chrome is what fades. -->
+
+    <!-- Smooth hover/press: every button-ish control and list row -->
+    <Style Selector=":is(Button) /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.12"/>
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.12"/>
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.12"/>
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <!-- Service-tab switches: the incoming view fades in -->
+    <Style Selector="views|MailView[IsVisible=true]">
+      <Style.Animations>
+        <Animation Duration="0:0:0.18" FillMode="Forward" Easing="CubicEaseOut">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0"/></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+    <Style Selector="ctl|BrowserTab[IsVisible=true]">
+      <Style.Animations>
+        <Animation Duration="0:0:0.18" FillMode="Forward" Easing="CubicEaseOut">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0"/></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+    <Style Selector="views|TerminalView[IsVisible=true]">
+      <Style.Animations>
+        <Animation Duration="0:0:0.18" FillMode="Forward" Easing="CubicEaseOut">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0"/></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <!-- Lock overlay eases in rather than snapping -->
+    <Style Selector="Border.lockOverlay[IsVisible=true]">
+      <Style.Animations>
+        <Animation Duration="0:0:0.22" FillMode="Forward" Easing="CubicEaseOut">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0"/></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <!-- "Remote content blocked" banner fades in with its message -->
+    <Style Selector="Border.fadeIn[IsVisible=true]">
+      <Style.Animations>
+        <Animation Duration="0:0:0.25" FillMode="Forward" Easing="CubicEaseOut">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0"/></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1"/></KeyFrame>
+        </Animation>
+      </Style.Animations>
     </Style>
   </Application.Styles>
 </Application>

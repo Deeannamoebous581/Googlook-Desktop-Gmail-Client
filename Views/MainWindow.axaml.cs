@@ -65,6 +65,37 @@ public partial class MainWindow : Window
         if (e.Key == Key.Enter) Unlock();
     }
 
+    private async void OnAddImapAccount(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+        try
+        {
+            var dialog = new AddImapAccountWindow();
+            var cfg = await dialog.ShowDialog<Googlook.Models.ImapAccountConfig?>(this);
+            if (cfg is not null) await vm.AddImapAccountAsync(cfg);
+        }
+        catch (Exception ex)
+        {
+            Services.Log.Error("AddImapAccount", ex);
+        }
+    }
+
+    private void OnSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+        if (e.Key == Key.Enter)
+        {
+            _ = vm.SearchCommand.ExecuteAsync(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            vm.SearchQuery = "";              // Esc clears and returns to the open folder
+            _ = vm.SearchCommand.ExecuteAsync(null);
+            e.Handled = true;
+        }
+    }
+
     private void Unlock()
     {
         if (DataContext is not MainViewModel vm) return;

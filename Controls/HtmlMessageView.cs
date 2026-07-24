@@ -64,17 +64,28 @@ public class HtmlMessageView : NativeControlHost
     {
         _hwnd = CreateChildWindow(parent.Handle);
         _ = InitializeAsync();
-        SizeChanged += (_, e) =>
-        {
-            try
-            {
-                if (_controller is not null)
-                    _controller.Bounds = new System.Drawing.Rectangle(
-                        0, 0, (int)e.NewSize.Width, (int)e.NewSize.Height);
-            }
-            catch { /* controller mid-teardown */ }
-        };
+        SizeChanged += (_, _) => UpdateControllerBounds();
         return new PlatformHandle(_hwnd, "HWND");
+    }
+
+    /// <summary>
+    /// Sizes the WebView2 controller to the host window. The controller works in
+    /// *physical* pixels while Avalonia's Bounds are logical units — without the
+    /// RenderScaling factor, any display scale above 100% leaves an unpainted
+    /// (black) band where the WebView doesn't reach.
+    /// </summary>
+    private void UpdateControllerBounds()
+    {
+        try
+        {
+            if (_controller is null) return;
+            var scale = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
+            _controller.Bounds = new System.Drawing.Rectangle(
+                0, 0,
+                Math.Max(0, (int)Math.Ceiling(Bounds.Width * scale)),
+                Math.Max(0, (int)Math.Ceiling(Bounds.Height * scale)));
+        }
+        catch { /* controller mid-teardown */ }
     }
 
     protected override void DestroyNativeControlCore(IPlatformHandle control)
@@ -94,9 +105,16 @@ public class HtmlMessageView : NativeControlHost
                 "Googlook", "profiles", "reader");
             System.IO.Directory.CreateDirectory(folder);
 
-            _env = await CoreWebView2Environment.CreateAsync(userDataFolder: folder);
+            // --disable-gpu: the reader shows static, network-blocked HTML, so GPU
+            // compositing buys nothing — and it's what renders WebView2 as a solid
+            // black box inside VMs / over RDP (no working hardware acceleration).
+            var opts = new CoreWebView2EnvironmentOptions
+            {
+                AdditionalBrowserArguments = "--disable-gpu",
+            };
+            _env = await CoreWebView2Environment.CreateAsync(null, folder, opts);
             _controller = await _env.CreateCoreWebView2ControllerAsync(_hwnd);
-            _controller.Bounds = new System.Drawing.Rectangle(0, 0, (int)Bounds.Width, (int)Bounds.Height);
+            UpdateControllerBounds();
             _controller.IsVisible = true;
             // An unpainted native window renders black; white blends with the reading pane
             // and prevents the "black box" that otherwise flashes when a dialog closes over it.
@@ -132,11 +150,13 @@ public class HtmlMessageView : NativeControlHost
             };
             core.NavigationStarting += (_, e) =>
             {
-                if (e.Uri.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                {
-                    e.Cancel = true;
-                    OpenExternal(e.Uri);
-                }
+                // Only our own NavigateToString content (about:blank) may load here.
+                // Everything else is cancelled and — if it's a scheme safe to hand to
+                // the OS — opened externally instead.
+                var uri = e.Uri ?? "";
+                if (uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) return;
+                e.Cancel = true;
+                OpenExternal(uri);
             };
 
             _ready = true;
@@ -144,7 +164,10 @@ public class HtmlMessageView : NativeControlHost
         }
         catch (Exception ex)
         {
-            Debug.WriteLine("HtmlMessageView init failed: " + ex.Message);
+            Googlook.Services.Log.Error("HtmlMessageView init", ex);
+            // Without a controller the bare child HWND paints as a black box ON TOP
+            // of the snippet fallback. Hide ourselves so the snippet shows through.
+            Dispatcher.UIThread.Post(() => IsVisible = false);
         }
     }
 
@@ -163,6 +186,13 @@ public class HtmlMessageView : NativeControlHost
 
     private static void OpenExternal(string uri)
     {
+        // Email HTML is attacker-controlled, and ShellExecute launches whatever handler a
+        // scheme is registered to (file://, UNC paths, ms-*: protocol handlers, ...).
+        // Only web links and mailto are safe to hand to the OS.
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed)) return;
+        if (parsed.Scheme != Uri.UriSchemeHttp &&
+            parsed.Scheme != Uri.UriSchemeHttps &&
+            parsed.Scheme != Uri.UriSchemeMailto) return;
         try { Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true }); } catch { }
     }
 

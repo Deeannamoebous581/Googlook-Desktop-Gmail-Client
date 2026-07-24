@@ -36,6 +36,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Embedded Roboto (Apache 2.0) — the Gmail typeface, bundled so the app looks
+         the same on machines that don't have it installed (which is most of them). -->
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- UI framework -->
     <PackageReference Include="Avalonia" Version="11.2.1" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.1" />
@@ -60,6 +66,10 @@
 
     <!-- In-email tracker / remote content stripping (Ganss.Xss namespace, 8.x and up) -->
     <PackageReference Include="HtmlSanitizer" Version="8.*" />
+
+    <!-- IMAP / POP3 / SMTP for non-Google accounts (MailKit is the de-facto .NET mail stack;
+         MimeKit comes with it and does all MIME building/parsing for those accounts) -->
+    <PackageReference Include="MailKit" Version="4.*" />
 
     <!-- WebView2 (Chromium) powers both the email reader (Controls/HtmlMessageView.cs)
          and the embedded browser tabs (Controls/BrowserView.cs), hosted via

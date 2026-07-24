@@ -7,6 +7,9 @@ namespace Googlook.Models;
 public sealed class AppConfig
 {
     public List<Account> Accounts { get; set; } = new();
+    /// <summary>Non-Google mail accounts (IMAP or POP3 + SMTP). Passwords live in this
+    /// encrypted vault, same as the Google refresh tokens. Capped at 10.</summary>
+    public List<ImapAccountConfig> ImapAccounts { get; set; } = new();
     /// <summary>Google OAuth token blobs, keyed by account id (managed by VaultDataStore).</summary>
     public Dictionary<string, string> OAuthTokens { get; set; } = new();
     public AppSettings Settings { get; set; } = new();
@@ -44,6 +47,26 @@ public sealed class Account
     public string  ProfileDir   { get; set; } = "";
 }
 
+/// <summary>A non-Google mail account: IMAP or POP3 for receiving, SMTP for sending.</summary>
+public sealed class ImapAccountConfig
+{
+    public string Id           { get; set; } = Guid.NewGuid().ToString("N");
+    public string EmailAddress { get; set; } = "";
+    public string DisplayName  { get; set; } = "";
+    /// <summary>"imap" or "pop3".</summary>
+    public string Protocol     { get; set; } = "imap";
+    /// <summary>Login name; empty means "use the email address".</summary>
+    public string Username     { get; set; } = "";
+    public string Password     { get; set; } = "";
+    /// <summary>Incoming (IMAP/POP3) server. TLS mode is derived from the port.</summary>
+    public string IncomingHost { get; set; } = "";
+    public int    IncomingPort { get; set; } = 993;
+    public string SmtpHost     { get; set; } = "";
+    public int    SmtpPort     { get; set; } = 587;
+
+    public string EffectiveUsername => string.IsNullOrWhiteSpace(Username) ? EmailAddress : Username;
+}
+
 public enum WellKnownFolder { Inbox, Starred, Snoozed, Sent, Drafts, Spam, Trash, AllMail }
 
 public sealed class MailFolder
@@ -59,6 +82,7 @@ public sealed class EmailMessage
     public string          ThreadId  { get; set; } = "";
     public string          From      { get; set; } = "";
     public string          To        { get; set; } = "";
+    public string          Cc        { get; set; } = "";
     public string          Subject   { get; set; } = "";
     public string          Snippet   { get; set; } = "";
     public DateTimeOffset  Date      { get; set; }

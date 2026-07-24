@@ -36,6 +36,19 @@ internal static class Program
         AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .WithInterFont()
+            // Default every control to the embedded Roboto (Gmail's typeface), with
+            // Segoe fallbacks so emoji/symbols (🔍 ✏ ⚙ …) render as proper glyphs
+            // instead of boxes on systems where the primary face lacks them.
+            .With(new Avalonia.Media.FontManagerOptions
+            {
+                DefaultFamilyName = "avares://Googlook/Assets/Fonts#Roboto",
+                FontFallbacks = new[]
+                {
+                    new Avalonia.Media.FontFallback { FontFamily = new Avalonia.Media.FontFamily("Segoe UI") },
+                    new Avalonia.Media.FontFallback { FontFamily = new Avalonia.Media.FontFamily("Segoe UI Emoji") },
+                    new Avalonia.Media.FontFallback { FontFamily = new Avalonia.Media.FontFamily("Segoe UI Symbol") },
+                },
+            })
             .LogToTrace();
             // The email reader and the browser tabs both embed WebView2 (Chromium) via
             // Avalonia's NativeControlHost (Controls/HtmlMessageView.cs, Controls/BrowserView.cs).
